@@ -1,0 +1,17 @@
+{
+  "expo": {
+    "name": "ZeroQApp",
+    "slug": "ZeroQApp",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true
+    },
+
+    "plugins": [
+      "expo-camera",
+      "expo-font"
+    ]
+  }
+}
