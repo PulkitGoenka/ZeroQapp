@@ -7,7 +7,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 
-export const BASE_URL = 'http://10.155.252.25:8080';
+export const BASE_URL = 'https://zeroq-backend.onrender.com';
 
 // ── Token helpers ──────────────────────────────────────────────
 const getAccessToken  = async () => AsyncStorage.getItem('accessToken');
