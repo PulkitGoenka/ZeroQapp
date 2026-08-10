@@ -3,6 +3,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { ActivityIndicator, View } from 'react-native';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather as Icon } from '@expo/vector-icons';
 import { useAuth } from '../store/AuthContext';
 
@@ -23,27 +24,51 @@ const Stack = createNativeStackNavigator();
 const Tab   = createBottomTabNavigator();
 
 function MainTabs() {
+    const insets = useSafeAreaInsets();
+
     return (
         <Tab.Navigator
             screenOptions={({ route }) => ({
                 headerShown: false,
                 tabBarActiveTintColor: '#2563EB',
                 tabBarInactiveTintColor: '#9CA3AF',
-                tabBarStyle: { backgroundColor: '#fff', borderTopColor: '#E5E7EB', height: 60, paddingBottom: 6, paddingTop: 6 },
-                tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
+
+                tabBarStyle: {
+                    backgroundColor: '#fff',
+                    borderTopColor: '#E5E7EB',
+                    height: 60 + insets.bottom,
+                    paddingBottom: insets.bottom + 6,
+                    paddingTop: 6,
+                },
+
+                tabBarLabelStyle: {
+                    fontSize: 11,
+                    fontWeight: '600',
+                },
+
                 tabBarIcon: ({ color, size }) => {
-                    const icons = { Home: 'home', Cart: 'shopping-cart', History: 'clock' };
-                    return <Icon name={icons[route.name] || 'circle'} size={size} color={color} />;
+                    const icons = {
+                        Home: 'home',
+                        Cart: 'shopping-cart',
+                        History: 'clock',
+                    };
+
+                    return (
+                        <Icon
+                            name={icons[route.name] || 'circle'}
+                            size={size}
+                            color={color}
+                        />
+                    );
                 },
             })}
         >
-            <Tab.Screen name="Home"    component={HomeScreen} />
-            <Tab.Screen name="Cart"    component={CartScreen} />
+            <Tab.Screen name="Home" component={HomeScreen} />
+            <Tab.Screen name="Cart" component={CartScreen} />
             <Tab.Screen name="History" component={HistoryScreen} />
         </Tab.Navigator>
     );
 }
-
 function AppStack() {
     return (
         <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -78,8 +103,10 @@ export default function AppNavigator() {
         </View>
     );
     return (
-        <NavigationContainer>
-            {user ? <AppStack /> : <AuthStack />}
-        </NavigationContainer>
+        <SafeAreaProvider>
+            <NavigationContainer>
+                {user ? <AppStack /> : <AuthStack />}
+            </NavigationContainer>
+        </SafeAreaProvider>
     );
 }
