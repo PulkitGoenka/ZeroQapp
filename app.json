@@ -16,6 +16,9 @@
       "eas": {
         "projectId": "ed248872-f5fe-4763-8e13-2858a4e5a2c2"
       }
+    },
+    "android": {
+      "package": "com.pulkitgoenka.ZeroQApp"
     }
   }
 }
