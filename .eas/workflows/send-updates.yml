@@ -1,0 +1,11 @@
+name: Send updates
+
+on:
+  push:
+    branches: ['main']
+
+jobs:
+  send_updates:
+    type: update
+    params:
+      branch: production
