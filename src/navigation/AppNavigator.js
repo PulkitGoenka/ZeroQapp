@@ -1,12 +1,13 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { ActivityIndicator, View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather as Icon } from '@expo/vector-icons';
 import { useAuth } from '../store/AuthContext';
 
+// Screens
+import SplashScreen     from '../screens/Loading/SplashScreen'; // <-- Step 2 wala screen file
 import LoginScreen      from '../screens/Auth/LoginScreen';
 import OtpScreen        from '../screens/Auth/OtpScreen';
 import HomeScreen       from '../screens/Home/HomeScreen';
@@ -30,9 +31,8 @@ function MainTabs() {
         <Tab.Navigator
             screenOptions={({ route }) => ({
                 headerShown: false,
-                tabBarActiveTintColor: '#2563EB',
+                tabBarActiveTintColor: '#4E989E', // Theme matching teal
                 tabBarInactiveTintColor: '#9CA3AF',
-
                 tabBarStyle: {
                     backgroundColor: '#fff',
                     borderTopColor: '#E5E7EB',
@@ -40,12 +40,10 @@ function MainTabs() {
                     paddingBottom: insets.bottom + 6,
                     paddingTop: 6,
                 },
-
                 tabBarLabelStyle: {
                     fontSize: 11,
                     fontWeight: '600',
                 },
-
                 tabBarIcon: ({ color, size }) => {
                     const icons = {
                         Home: 'home',
@@ -69,19 +67,20 @@ function MainTabs() {
         </Tab.Navigator>
     );
 }
+
 function AppStack() {
     return (
         <Stack.Navigator screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="MainTabs"    component={MainTabs} />
-            <Stack.Screen name="BrandSelect" component={BrandSelectScreen} />
-            <Stack.Screen name="StoreSelect" component={StoreSelectScreen} />
-            <Stack.Screen name="StoreHome"   component={StoreHomeScreen} />
-            <Stack.Screen name="Cart"        component={CartScreen} />
-            <Stack.Screen name="History"     component={HistoryScreen} />
-            <Stack.Screen name="Scanner"     component={ScannerScreen} />
-            <Stack.Screen name="Payment"     component={PaymentScreen} />
+            <Stack.Screen name="MainTabs"       component={MainTabs} />
+            <Stack.Screen name="BrandSelect"    component={BrandSelectScreen} />
+            <Stack.Screen name="StoreSelect"    component={StoreSelectScreen} />
+            <Stack.Screen name="StoreHome"      component={StoreHomeScreen} />
+            <Stack.Screen name="Cart"           component={CartScreen} />
+            <Stack.Screen name="History"        component={HistoryScreen} />
+            <Stack.Screen name="Scanner"        component={ScannerScreen} />
+            <Stack.Screen name="Payment"        component={PaymentScreen} />
             <Stack.Screen name="OnlineCheckout" component={OnlineCheckoutScreen} />
-            <Stack.Screen name="PaymentQr"   component={PaymentQrScreen} />
+            <Stack.Screen name="PaymentQr"      component={PaymentQrScreen} />
         </Stack.Navigator>
     );
 }
@@ -89,19 +88,26 @@ function AppStack() {
 function AuthStack() {
     return (
         <Stack.Navigator screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="Login" component={LoginScreen} />
-            <Stack.Screen name="Otp"   component={OtpScreen} />
+            <Stack.Screen name="Splash" component={SplashScreen} />
+            <Stack.Screen name="Login"  component={LoginScreen} />
+            <Stack.Screen name="Otp"    component={OtpScreen} />
         </Stack.Navigator>
     );
 }
 
 export default function AppNavigator() {
     const { user, isLoading } = useAuth();
-    if (isLoading) return (
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F9FAFB' }}>
-            <ActivityIndicator size="large" color="#2563EB" />
-        </View>
-    );
+    const [isSplashDone, setIsSplashDone] = useState(false);
+
+    // Jab tak auth check ho raha hai ya initial splash time chal raha hai
+    if (isLoading || !isSplashDone) {
+        return (
+            <SafeAreaProvider>
+                <SplashScreen navigation={{ replace: () => setIsSplashDone(true) }} />
+            </SafeAreaProvider>
+        );
+    }
+
     return (
         <SafeAreaProvider>
             <NavigationContainer>
