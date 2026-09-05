@@ -2,19 +2,19 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator, Alert,
-  Animated,
+  Animated, ImageBackground, Dimensions,
 } from 'react-native';
 import { Feather as Icon } from '@expo/vector-icons';
 import { sendOtp } from '../../services/api';
+
+const { width, height } = Dimensions.get('window');
 
 export default function LoginScreen({ navigation }) {
   const [phone, setPhone] = useState('');
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Entrance Animations
-  const logoFade = useRef(new Animated.Value(0)).current;
-  const logoTranslateY = useRef(new Animated.Value(-20)).current;
+  // Card Entrance Animation
   const cardFade = useRef(new Animated.Value(0)).current;
   const cardTranslateY = useRef(new Animated.Value(30)).current;
 
@@ -22,32 +22,17 @@ export default function LoginScreen({ navigation }) {
   const btnScale = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    // Screen open hote hi smooth entrance animation
+    // Card Slide-up & Fade-in smoothly
     Animated.parallel([
-      // Logo Fade-in + Drop
-      Animated.timing(logoFade, {
-        toValue: 1,
-        duration: 600,
-        useNativeDriver: true,
-      }),
-      Animated.spring(logoTranslateY, {
-        toValue: 0,
-        friction: 6,
-        tension: 40,
-        useNativeDriver: true,
-      }),
-      // Card Slide-up
       Animated.timing(cardFade, {
         toValue: 1,
-        duration: 700,
-        delay: 200,
+        duration: 600,
         useNativeDriver: true,
       }),
       Animated.spring(cardTranslateY, {
         toValue: 0,
         friction: 7,
         tension: 35,
-        delay: 200,
         useNativeDriver: true,
       }),
     ]).start();
@@ -86,121 +71,113 @@ export default function LoginScreen({ navigation }) {
   };
 
   return (
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-        <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-
-          {/* Animated Brand Logo */}
-          <Animated.View
-              style={[
-                styles.logoWrap,
-                {
-                  opacity: logoFade,
-                  transform: [{ translateY: logoTranslateY }],
-                },
-              ]}
+      // 100% Full-Screen Pattern Background
+      <ImageBackground
+          source={require('../../../assets/Background _image.png')}
+          style={styles.fullScreenBg}
+          resizeMode="cover"
+      >
+        <KeyboardAvoidingView
+            style={styles.flex}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <ScrollView
+              contentContainerStyle={styles.container}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
           >
-            <Animated.Image
-                source={require('../../../assets/logo.png')}
-                style={styles.logoImage}
-                resizeMode="contain"
-            />
-          </Animated.View>
+            {/* Animated Form Card */}
+            <Animated.View
+                style={[
+                  styles.card,
+                  {
+                    opacity: cardFade,
+                    transform: [{ translateY: cardTranslateY }],
+                  },
+                ]}
+            >
+              <Text style={styles.cardTitle}>Welcome</Text>
+              <Text style={styles.cardSub}>Enter your details to get started</Text>
 
-          {/* Animated Form Card */}
-          <Animated.View
-              style={[
-                styles.card,
-                {
-                  opacity: cardFade,
-                  transform: [{ translateY: cardTranslateY }],
-                },
-              ]}
-          >
-            <Text style={styles.cardTitle}>Welcome</Text>
-            <Text style={styles.cardSub}>Enter your details to get started</Text>
-
-            {/* Full Name */}
-            <Text style={styles.label}>
-              Full Name <Text style={styles.req}>*</Text>
-            </Text>
-            <View style={[styles.inputWrap, name.trim() && styles.inputActive]}>
-              <Icon name="user" size={16} color={name.trim() ? '#4D8E94' : '#9CA3AF'} />
-              <TextInput
-                  style={styles.input}
-                  placeholder="Your full name"
-                  placeholderTextColor="#9CA3AF"
-                  value={name}
-                  onChangeText={setName}
-                  autoCapitalize="words"
-              />
-            </View>
-
-            {/* Mobile Number */}
-            <Text style={styles.label}>
-              Mobile Number <Text style={styles.req}>*</Text>
-            </Text>
-            <View style={[styles.inputWrap, phone.trim() && styles.inputActive]}>
-              <View style={styles.prefix}>
-                <Text style={styles.prefixText}>🇮🇳 +91</Text>
+              {/* Full Name */}
+              <Text style={styles.label}>
+                Full Name <Text style={styles.req}>*</Text>
+              </Text>
+              <View style={[styles.inputWrap, name.trim() && styles.inputActive]}>
+                <Icon name="user" size={16} color={name.trim() ? '#4D8E94' : '#9CA3AF'} />
+                <TextInput
+                    style={styles.input}
+                    placeholder="Your full name"
+                    placeholderTextColor="#9CA3AF"
+                    value={name}
+                    onChangeText={setName}
+                    autoCapitalize="words"
+                />
               </View>
-              <View style={styles.divider} />
-              <TextInput
-                  style={styles.input}
-                  placeholder="10-digit number"
-                  placeholderTextColor="#9CA3AF"
-                  keyboardType="phone-pad"
-                  maxLength={10}
-                  value={phone}
-                  onChangeText={setPhone}
-              />
-            </View>
 
-            {/* Animated Send OTP Button */}
-            <Animated.View style={{ transform: [{ scale: btnScale }] }}>
-              <TouchableOpacity
-                  style={[styles.btn, (!canSubmit || loading) && styles.btnOff]}
-                  onPress={handleSend}
-                  onPressIn={onPressIn}
-                  onPressOut={onPressOut}
-                  disabled={!canSubmit || loading}
-                  activeOpacity={0.9}
-              >
-                {loading ? (
-                    <ActivityIndicator color="#fff" />
-                ) : (
-                    <>
-                      <Icon name="send" size={16} color="#fff" />
-                      <Text style={styles.btnText}>Send OTP</Text>
-                    </>
-                )}
-              </TouchableOpacity>
+              {/* Mobile Number */}
+              <Text style={styles.label}>
+                Mobile Number <Text style={styles.req}>*</Text>
+              </Text>
+              <View style={[styles.inputWrap, phone.trim() && styles.inputActive]}>
+                <View style={styles.prefix}>
+                  <Text style={styles.prefixText}>🇮🇳 +91</Text>
+                </View>
+                <View style={styles.divider} />
+                <TextInput
+                    style={styles.input}
+                    placeholder="10-digit number"
+                    placeholderTextColor="#9CA3AF"
+                    keyboardType="phone-pad"
+                    maxLength={10}
+                    value={phone}
+                    onChangeText={setPhone}
+                />
+              </View>
+
+              {/* Animated Send OTP Button */}
+              <Animated.View style={{ transform: [{ scale: btnScale }] }}>
+                <TouchableOpacity
+                    style={[styles.btn, (!canSubmit || loading) && styles.btnOff]}
+                    onPress={handleSend}
+                    onPressIn={onPressIn}
+                    onPressOut={onPressOut}
+                    disabled={!canSubmit || loading}
+                    activeOpacity={0.9}
+                >
+                  {loading ? (
+                      <ActivityIndicator color="#fff" />
+                  ) : (
+                      <>
+                        <Icon name="send" size={16} color="#fff" />
+                        <Text style={styles.btnText}>Send OTP</Text>
+                      </>
+                  )}
+                </TouchableOpacity>
+              </Animated.View>
+
+              <Text style={styles.note}>We'll send a 6-digit OTP to verify your number</Text>
             </Animated.View>
-
-            <Text style={styles.note}>We'll send a 6-digit OTP to verify your number</Text>
-          </Animated.View>
-
-        </ScrollView>
-      </KeyboardAvoidingView>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
+  fullScreenBg: {
+    width: width,
+    height: height,
+    flex: 1,
+  },
   flex: {
     flex: 1,
-    backgroundColor: '#69AEB4',
   },
   container: {
     flexGrow: 1,
     justifyContent: 'center',
-    padding: 24,
-  },
-  logoWrap: {
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  logoImage: {
-    width: 210,
-    height: 120,
+    paddingHorizontal: 24,
+    paddingVertical: 32,
   },
   card: {
     backgroundColor: '#FFFFFF',
@@ -212,15 +189,15 @@ const styles = StyleSheet.create({
     elevation: 7,
   },
   cardTitle: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '700',
     color: '#111827',
     marginBottom: 4,
   },
   cardSub: {
-    fontSize: 13,
+    fontSize: 14,
     color: '#6B7280',
-    marginBottom: 20,
+    marginBottom: 24,
   },
   label: {
     fontSize: 13,
@@ -278,7 +255,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 4,
-    marginTop: 6,
+    marginTop: 8,
   },
   btnOff: {
     opacity: 0.5,
@@ -292,6 +269,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: '#9CA3AF',
     fontSize: 12,
-    marginTop: 16,
+    marginTop: 18,
   },
 });
