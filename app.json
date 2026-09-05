@@ -5,6 +5,9 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true
     },
@@ -21,8 +24,6 @@
       "package": "com.pulkitgoenka.ZeroQApp",
       "permissions": [
         "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO",
-        "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO"
       ]
     },
@@ -30,7 +31,10 @@
       "policy": "appVersion"
     },
     "updates": {
-      "url": "https://u.expo.dev/ed248872-f5fe-4763-8e13-2858a4e5a2c2"
+      "url": "https://u.expo.dev/ed248872-f5fe-4763-8e13-2858a4e5a2c2",
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
     }
   }
 }
