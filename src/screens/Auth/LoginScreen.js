@@ -1,49 +1,10 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator, Alert,
+  KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator, Alert, Image,
 } from 'react-native';
-import Svg, { Path, Circle, Line, G } from 'react-native-svg';
 import { Feather as Icon } from '@expo/vector-icons';
 import { sendOtp } from '../../services/api';
-
-// Self-contained ITSELF Graphic
-function ItselfGraphic({ size = 1 }) {
-  return (
-      <Svg width={140 * size} height={70 * size} viewBox="0 0 200 110">
-        {/* Speed Lines */}
-        <G stroke="#F7B32B" strokeWidth="2.5" strokeLinecap="round">
-          <Line x1="28" y1="41" x2="52" y2="41" />
-          <Line x1="22" y1="48" x2="48" y2="48" />
-          <Line x1="31" y1="55" x2="60" y2="55" />
-          <Line x1="16" y1="63" x2="44" y2="63" />
-          <Line x1="21" y1="69" x2="40" y2="69" />
-        </G>
-
-        {/* Runner */}
-        <G fill="#FFFFFF">
-          <Circle cx="83" cy="22.5" r="7" />
-          <Path d="M78 32 C82 31 87 31 92 35 L106 49 L101 54 L90 44 L87 56 L103 76 L97 81 L82 62 L73 68 L66 50 C71 42 74 36 78 32 Z" />
-          <Path d="M83 63 L92 78 L99 91 L108 92 L108 96 L94 96 L86 82 L77 68 Z" />
-          <Path d="M72 67 L57 85 L44 85 L44 93 L49 93 L61 88 L74 72 Z" />
-          <Path d="M90 40 L108 44 L110 52 L105 52 L104 47 L89 44 Z" />
-        </G>
-
-        {/* Trolley Basket */}
-        <G fill="none" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <Path d="M109 48 L142 50 L138 72 L114 72 Z" />
-          <Path d="M115 49 L118 72" />
-          <Path d="M123 49 L125 72" />
-          <Path d="M131 49 L132 72" />
-          <Path d="M112 55 L140 56" />
-          <Path d="M113 63 L139 64" />
-          <Path d="M115 72 L111 81 L138 81" strokeWidth="2.2" />
-        </G>
-        <Circle cx="114" cy="86" r="3.5" fill="#FFFFFF" />
-        <Circle cx="135" cy="86" r="3.5" fill="#FFFFFF" />
-      </Svg>
-  );
-}
 
 export default function LoginScreen({ navigation }) {
   const [phone, setPhone] = useState('');
@@ -71,9 +32,13 @@ export default function LoginScreen({ navigation }) {
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
 
-          {/* Updated ITSELF Branding */}
+          {/* Logo Section (Correct 3-level path ../../../assets/Logo.jpg) */}
           <View style={styles.logoWrap}>
-            <ItselfGraphic size={1.1} />
+            <Image
+                source={require('../../../assets/Logo.jpg')}
+                style={styles.logoImage}
+                resizeMode="contain"
+            />
             <Text style={styles.logoTitle}>ITSELF</Text>
             <Text style={styles.logoSub}>
               SCAN . PAY <Text style={styles.subAccent}>&amp; GO</Text>
@@ -141,9 +106,13 @@ export default function LoginScreen({ navigation }) {
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: '#69AEB4' },
   container: { flexGrow: 1, justifyContent: 'center', padding: 24 },
-  logoWrap: { alignItems: 'center', marginBottom: 26 },
+  logoWrap: { alignItems: 'center', marginBottom: 24 },
+  logoImage: {
+    width: 130,
+    height: 70,
+  },
   logoTitle: {
-    fontSize: 34,
+    fontSize: 32,
     fontWeight: '900',
     color: '#FFFFFF',
     letterSpacing: 2.5,
