@@ -1,48 +1,82 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ImageBackground, Animated } from 'react-native';
+import { View, Text, StyleSheet, ImageBackground, Animated, Dimensions } from 'react-native';
+
+const { width } = Dimensions.get('window');
+
+const LETTERS = ['I', 'T', 'S', 'E', 'L', 'F'];
 
 export default function SplashScreen({ navigation }) {
-    // Animation Values
-    const logoOpacity = useRef(new Animated.Value(0)).current;
-    const logoScale = useRef(new Animated.Value(0.8)).current;
-    const textOpacity = useRef(new Animated.Value(0)).current;
-    const textTranslateY = useRef(new Animated.Value(20)).current;
+    // Runner run-in animation (left side se aayega)
+    const runnerTranslateX = useRef(new Animated.Value(-width)).current;
+    const runnerOpacity = useRef(new Animated.Value(0)).current;
+
+    // Har letter ke liye alag animated values
+    const lettersAnim = useRef(
+        LETTERS.map(() => ({
+            opacity: new Animated.Value(0),
+            scale: new Animated.Value(0.3),
+            translateY: new Animated.Value(-15),
+        }))
+    ).current;
+
+    // Tagline Fade-in
+    const taglineOpacity = useRef(new Animated.Value(0)).current;
 
     useEffect(() => {
-        // Step-by-step Animation Chalu karo
-        Animated.sequence([
-            // 1. Logo Fade-in aur Scale hoga
+        // 1. Runner running.png daudta hua center mein aayega
+        const runnerAnimation = Animated.parallel([
+            Animated.timing(runnerOpacity, {
+                toValue: 1,
+                duration: 350,
+                useNativeDriver: true,
+            }),
+            Animated.spring(runnerTranslateX, {
+                toValue: 0,
+                friction: 7,
+                tension: 40,
+                useNativeDriver: true,
+            }),
+        ]);
+
+        // 2. I - T - S - E - L - F ek-ek karke appear honge
+        const letterAnimations = LETTERS.map((_, i) =>
             Animated.parallel([
-                Animated.timing(logoOpacity, {
+                Animated.timing(lettersAnim[i].opacity, {
                     toValue: 1,
-                    duration: 700,
+                    duration: 180,
                     useNativeDriver: true,
                 }),
-                Animated.spring(logoScale, {
+                Animated.spring(lettersAnim[i].scale, {
                     toValue: 1,
-                    friction: 6,
+                    friction: 4,
                     useNativeDriver: true,
                 }),
-            ]),
-            // 2. Logo ke baad Text Slide-up hokar aayega
-            Animated.parallel([
-                Animated.timing(textOpacity, {
-                    toValue: 1,
-                    duration: 600,
-                    useNativeDriver: true,
-                }),
-                Animated.timing(textTranslateY, {
+                Animated.timing(lettersAnim[i].translateY, {
                     toValue: 0,
-                    duration: 600,
+                    duration: 180,
                     useNativeDriver: true,
                 }),
-            ]),
+            ])
+        );
+
+        // 3. Tagline reveal
+        const taglineAnimation = Animated.timing(taglineOpacity, {
+            toValue: 1,
+            duration: 400,
+            useNativeDriver: true,
+        });
+
+        // Sequence execution
+        Animated.sequence([
+            runnerAnimation,
+            Animated.stagger(120, letterAnimations),
+            taglineAnimation,
         ]).start();
 
-        // 2.5 second baad Login screen par bhej do
+        // 3.2 seconds baad Login screen
         const timer = setTimeout(() => {
             navigation.replace('Login');
-        }, 2500);
+        }, 3200);
 
         return () => clearTimeout(timer);
     }, [navigation]);
@@ -53,33 +87,45 @@ export default function SplashScreen({ navigation }) {
             style={styles.container}
             resizeMode="cover"
         >
-            <View style={styles.centerBox}>
-                {/* Animated Logo Image */}
+            <View style={styles.contentWrap}>
+                {/* Animated Running PNG Graphic */}
                 <Animated.Image
-                    source={require('../../../assets/Logo.jpg')}
+                    source={require('../../../assets/running.png')}
                     style={[
-                        styles.logo,
+                        styles.runnerImage,
                         {
-                            opacity: logoOpacity,
-                            transform: [{ scale: logoScale }],
+                            opacity: runnerOpacity,
+                            transform: [{ translateX: runnerTranslateX }],
                         },
                     ]}
                     resizeMode="contain"
                 />
 
-                {/* Animated Text Block */}
-                <Animated.View
-                    style={{
-                        opacity: textOpacity,
-                        transform: [{ translateY: textTranslateY }],
-                        alignItems: 'center',
-                    }}
-                >
-                    <Text style={styles.title}>ITSELF</Text>
-                    <Text style={styles.tagline}>
-                        SCAN . PAY <Text style={styles.accent}>&amp; GO</Text>
-                    </Text>
-                </Animated.View>
+                {/* Animated Letters: I - T - S - E - L - F */}
+                <View style={styles.lettersRow}>
+                    {LETTERS.map((char, index) => (
+                        <Animated.Text
+                            key={index}
+                            style={[
+                                styles.letter,
+                                {
+                                    opacity: lettersAnim[index].opacity,
+                                    transform: [
+                                        { scale: lettersAnim[index].scale },
+                                        { translateY: lettersAnim[index].translateY },
+                                    ],
+                                },
+                            ]}
+                        >
+                            {char}
+                        </Animated.Text>
+                    ))}
+                </View>
+
+                {/* Animated Tagline */}
+                <Animated.Text style={[styles.tagline, { opacity: taglineOpacity }]}>
+                    SCAN . PAY <Text style={styles.accent}>&amp; GO</Text>
+                </Animated.Text>
             </View>
         </ImageBackground>
     );
@@ -91,26 +137,32 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
     },
-    centerBox: {
+    contentWrap: {
         alignItems: 'center',
     },
-    logo: {
+    runnerImage: {
         width: 140,
-        height: 100,
-        marginBottom: 10,
+        height: 90,
+        marginBottom: 6,
     },
-    title: {
-        fontSize: 42,
+    lettersRow: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginVertical: 4,
+    },
+    letter: {
+        fontSize: 46,
         fontWeight: '900',
         color: '#FFFFFF',
-        letterSpacing: 3,
+        letterSpacing: 4,
     },
     tagline: {
         fontSize: 14,
         fontWeight: '800',
         color: '#FFFFFF',
         letterSpacing: 2,
-        marginTop: 4,
+        marginTop: 6,
     },
     accent: {
         color: '#F7B32B',
