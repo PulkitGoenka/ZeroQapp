@@ -6,16 +6,16 @@ const { width } = Dimensions.get('window');
 const LETTERS = ['I', 'T', 'S', 'E', 'L', 'F'];
 
 export default function SplashScreen({ navigation }) {
-    // Runner run-in animation (left side se aayega)
-    const runnerTranslateX = useRef(new Animated.Value(-width)).current;
+    // Runner translation & opacity
+    const runnerTranslateX = useRef(new Animated.Value(-width * 0.8)).current;
     const runnerOpacity = useRef(new Animated.Value(0)).current;
 
-    // Har letter ke liye alag animated values
+    // Har letter ke liye staggered animation
     const lettersAnim = useRef(
         LETTERS.map(() => ({
             opacity: new Animated.Value(0),
-            scale: new Animated.Value(0.3),
-            translateY: new Animated.Value(-15),
+            scale: new Animated.Value(0.4),
+            translateY: new Animated.Value(-10),
         }))
     ).current;
 
@@ -23,8 +23,8 @@ export default function SplashScreen({ navigation }) {
     const taglineOpacity = useRef(new Animated.Value(0)).current;
 
     useEffect(() => {
-        // 1. Runner running.png daudta hua center mein aayega
-        const runnerAnimation = Animated.parallel([
+        // 1. Man + Cart left se center mein daudta hua aayega
+        const runnerAnim = Animated.parallel([
             Animated.timing(runnerOpacity, {
                 toValue: 1,
                 duration: 350,
@@ -33,17 +33,17 @@ export default function SplashScreen({ navigation }) {
             Animated.spring(runnerTranslateX, {
                 toValue: 0,
                 friction: 7,
-                tension: 40,
+                tension: 42,
                 useNativeDriver: true,
             }),
         ]);
 
-        // 2. I - T - S - E - L - F ek-ek karke appear honge
+        // 2. Letters ka smooth reveal (Runner ke rukte hi)
         const letterAnimations = LETTERS.map((_, i) =>
             Animated.parallel([
                 Animated.timing(lettersAnim[i].opacity, {
                     toValue: 1,
-                    duration: 180,
+                    duration: 160,
                     useNativeDriver: true,
                 }),
                 Animated.spring(lettersAnim[i].scale, {
@@ -53,27 +53,27 @@ export default function SplashScreen({ navigation }) {
                 }),
                 Animated.timing(lettersAnim[i].translateY, {
                     toValue: 0,
-                    duration: 180,
+                    duration: 160,
                     useNativeDriver: true,
                 }),
             ])
         );
 
-        // 3. Tagline reveal
-        const taglineAnimation = Animated.timing(taglineOpacity, {
+        // 3. Tagline (SCAN . PAY & GO)
+        const taglineAnim = Animated.timing(taglineOpacity, {
             toValue: 1,
-            duration: 400,
+            duration: 350,
             useNativeDriver: true,
         });
 
-        // Sequence execution
+        // Sequence start
         Animated.sequence([
-            runnerAnimation,
-            Animated.stagger(120, letterAnimations),
-            taglineAnimation,
+            runnerAnim,
+            Animated.stagger(100, letterAnimations),
+            taglineAnim,
         ]).start();
 
-        // 3.2 seconds baad Login screen
+        // 3.2 seconds baad Login Screen navigate
         const timer = setTimeout(() => {
             navigation.replace('Login');
         }, 3200);
@@ -87,21 +87,27 @@ export default function SplashScreen({ navigation }) {
             style={styles.container}
             resizeMode="cover"
         >
-            <View style={styles.contentWrap}>
-                {/* Animated Running PNG Graphic */}
-                <Animated.Image
-                    source={require('../../../assets/running.png')}
+            {/* Central Brand Lockup - Man + Cart + Name + Tagline */}
+            <View style={styles.brandLockup}>
+
+                {/* Layer 1: Man + Cart Graphic (Width aligned with ITSELF) */}
+                <Animated.View
                     style={[
-                        styles.runnerImage,
+                        styles.runnerWrapper,
                         {
                             opacity: runnerOpacity,
                             transform: [{ translateX: runnerTranslateX }],
                         },
                     ]}
-                    resizeMode="contain"
-                />
+                >
+                    <Animated.Image
+                        source={require('../../../assets/running.png')}
+                        style={styles.runnerImage}
+                        resizeMode="contain"
+                    />
+                </Animated.View>
 
-                {/* Animated Letters: I - T - S - E - L - F */}
+                {/* Layer 2: ITSELF Letters (Exact match to the cart boundary) */}
                 <View style={styles.lettersRow}>
                     {LETTERS.map((char, index) => (
                         <Animated.Text
@@ -122,10 +128,13 @@ export default function SplashScreen({ navigation }) {
                     ))}
                 </View>
 
-                {/* Animated Tagline */}
-                <Animated.Text style={[styles.tagline, { opacity: taglineOpacity }]}>
-                    SCAN . PAY <Text style={styles.accent}>&amp; GO</Text>
-                </Animated.Text>
+                {/* Layer 3: Tagline */}
+                <Animated.View style={{ opacity: taglineOpacity, alignItems: 'center' }}>
+                    <Text style={styles.tagline}>
+                        SCAN . PAY <Text style={styles.accent}>&amp; GO</Text>
+                    </Text>
+                </Animated.View>
+
             </View>
         </ImageBackground>
     );
@@ -137,32 +146,43 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
     },
-    contentWrap: {
+    brandLockup: {
+        width: 240, // Fixed width container so runner & text perfectly align
         alignItems: 'center',
+        justifyContent: 'center',
+    },
+    runnerWrapper: {
+        width: 240,
+        height: 115,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: -4, // Cart ko text ke paas lane ke liye tighter spacing
     },
     runnerImage: {
-        width: 140,
-        height: 90,
-        marginBottom: 6,
+        width: 220,
+        height: 115,
     },
     lettersRow: {
         flexDirection: 'row',
-        justifyContent: 'center',
+        justifyContent: 'space-between',
+        width: 210, // Matches width of the runner graphic above
         alignItems: 'center',
         marginVertical: 4,
     },
     letter: {
-        fontSize: 46,
+        fontSize: 44,
         fontWeight: '900',
         color: '#FFFFFF',
-        letterSpacing: 4,
+        letterSpacing: 2,
+        textAlign: 'center',
     },
     tagline: {
-        fontSize: 14,
+        fontSize: 13,
         fontWeight: '800',
         color: '#FFFFFF',
         letterSpacing: 2,
-        marginTop: 6,
+        marginTop: 4,
+        textAlign: 'center',
     },
     accent: {
         color: '#F7B32B',
