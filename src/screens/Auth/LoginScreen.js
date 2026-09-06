@@ -2,12 +2,12 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator, Alert,
-  Animated, ImageBackground, Dimensions,
+  Animated, ImageBackground, Dimensions, StatusBar,
 } from 'react-native';
 import { Feather as Icon } from '@expo/vector-icons';
 import { sendOtp } from '../../services/api';
 
-const { width, height } = Dimensions.get('window');
+const { width, height } = Dimensions.get('screen');
 
 export default function LoginScreen({ navigation }) {
   const [phone, setPhone] = useState('');
@@ -22,7 +22,6 @@ export default function LoginScreen({ navigation }) {
   const btnScale = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    // Card Slide-up & Fade-in smoothly
     Animated.parallel([
       Animated.timing(cardFade, {
         toValue: 1,
@@ -71,100 +70,109 @@ export default function LoginScreen({ navigation }) {
   };
 
   return (
-      // 100% Full-Screen Pattern Background
-      <ImageBackground
-          source={require('../../../assets/Background _image.png')}
-          style={styles.fullScreenBg}
-          resizeMode="cover"
-      >
-        <KeyboardAvoidingView
-            style={styles.flex}
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      <View style={styles.root}>
+        {/* Edge-to-edge transparent status bar */}
+        <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
+
+        {/* 100% Full-Screen Pattern Background */}
+        <ImageBackground
+            source={require('../../../assets/Background _image.png')}
+            style={styles.fullScreenBg}
+            resizeMode="cover"
         >
-          <ScrollView
-              contentContainerStyle={styles.container}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
+          <KeyboardAvoidingView
+              style={styles.flex}
+              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           >
-            {/* Animated Form Card */}
-            <Animated.View
-                style={[
-                  styles.card,
-                  {
-                    opacity: cardFade,
-                    transform: [{ translateY: cardTranslateY }],
-                  },
-                ]}
+            <ScrollView
+                contentContainerStyle={styles.container}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
             >
-              <Text style={styles.cardTitle}>Welcome</Text>
-              <Text style={styles.cardSub}>Enter your details to get started</Text>
+              {/* Animated Form Card */}
+              <Animated.View
+                  style={[
+                    styles.card,
+                    {
+                      opacity: cardFade,
+                      transform: [{ translateY: cardTranslateY }],
+                    },
+                  ]}
+              >
+                <Text style={styles.cardTitle}>Welcome</Text>
+                <Text style={styles.cardSub}>Enter your details to get started</Text>
 
-              {/* Full Name */}
-              <Text style={styles.label}>
-                Full Name <Text style={styles.req}>*</Text>
-              </Text>
-              <View style={[styles.inputWrap, name.trim() && styles.inputActive]}>
-                <Icon name="user" size={16} color={name.trim() ? '#4D8E94' : '#9CA3AF'} />
-                <TextInput
-                    style={styles.input}
-                    placeholder="Your full name"
-                    placeholderTextColor="#9CA3AF"
-                    value={name}
-                    onChangeText={setName}
-                    autoCapitalize="words"
-                />
-              </View>
-
-              {/* Mobile Number */}
-              <Text style={styles.label}>
-                Mobile Number <Text style={styles.req}>*</Text>
-              </Text>
-              <View style={[styles.inputWrap, phone.trim() && styles.inputActive]}>
-                <View style={styles.prefix}>
-                  <Text style={styles.prefixText}>🇮🇳 +91</Text>
+                {/* Full Name */}
+                <Text style={styles.label}>
+                  Full Name <Text style={styles.req}>*</Text>
+                </Text>
+                <View style={[styles.inputWrap, name.trim() && styles.inputActive]}>
+                  <Icon name="user" size={16} color={name.trim() ? '#4D8E94' : '#9CA3AF'} />
+                  <TextInput
+                      style={styles.input}
+                      placeholder="Your full name"
+                      placeholderTextColor="#9CA3AF"
+                      value={name}
+                      onChangeText={setName}
+                      autoCapitalize="words"
+                  />
                 </View>
-                <View style={styles.divider} />
-                <TextInput
-                    style={styles.input}
-                    placeholder="10-digit number"
-                    placeholderTextColor="#9CA3AF"
-                    keyboardType="phone-pad"
-                    maxLength={10}
-                    value={phone}
-                    onChangeText={setPhone}
-                />
-              </View>
 
-              {/* Animated Send OTP Button */}
-              <Animated.View style={{ transform: [{ scale: btnScale }] }}>
-                <TouchableOpacity
-                    style={[styles.btn, (!canSubmit || loading) && styles.btnOff]}
-                    onPress={handleSend}
-                    onPressIn={onPressIn}
-                    onPressOut={onPressOut}
-                    disabled={!canSubmit || loading}
-                    activeOpacity={0.9}
-                >
-                  {loading ? (
-                      <ActivityIndicator color="#fff" />
-                  ) : (
-                      <>
-                        <Icon name="send" size={16} color="#fff" />
-                        <Text style={styles.btnText}>Send OTP</Text>
-                      </>
-                  )}
-                </TouchableOpacity>
+                {/* Mobile Number */}
+                <Text style={styles.label}>
+                  Mobile Number <Text style={styles.req}>*</Text>
+                </Text>
+                <View style={[styles.inputWrap, phone.trim() && styles.inputActive]}>
+                  <View style={styles.prefix}>
+                    <Text style={styles.prefixText}>🇮🇳 +91</Text>
+                  </View>
+                  <View style={styles.divider} />
+                  <TextInput
+                      style={styles.input}
+                      placeholder="10-digit number"
+                      placeholderTextColor="#9CA3AF"
+                      keyboardType="phone-pad"
+                      maxLength={10}
+                      value={phone}
+                      onChangeText={setPhone}
+                  />
+                </View>
+
+                {/* Animated Send OTP Button */}
+                <Animated.View style={{ transform: [{ scale: btnScale }] }}>
+                  <TouchableOpacity
+                      style={[styles.btn, (!canSubmit || loading) && styles.btnOff]}
+                      onPress={handleSend}
+                      onPressIn={onPressIn}
+                      onPressOut={onPressOut}
+                      disabled={!canSubmit || loading}
+                      activeOpacity={0.9}
+                  >
+                    {loading ? (
+                        <ActivityIndicator color="#fff" />
+                    ) : (
+                        <>
+                          <Icon name="send" size={16} color="#fff" />
+                          <Text style={styles.btnText}>Send OTP</Text>
+                        </>
+                    )}
+                  </TouchableOpacity>
+                </Animated.View>
+
+                <Text style={styles.note}>We'll send a 6-digit OTP to verify your number</Text>
               </Animated.View>
-
-              <Text style={styles.note}>We'll send a 6-digit OTP to verify your number</Text>
-            </Animated.View>
-          </ScrollView>
-        </KeyboardAvoidingView>
-      </ImageBackground>
+            </ScrollView>
+          </KeyboardAvoidingView>
+        </ImageBackground>
+      </View>
   );
 }
 
 const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: '#69AEB4',
+  },
   fullScreenBg: {
     width: width,
     height: height,

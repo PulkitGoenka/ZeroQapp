@@ -34,7 +34,7 @@ export default function HomeScreen({ navigation }) {
 
     return (
         <View style={styles.flex}>
-            <StatusBar barStyle="dark-content" backgroundColor="#F0F4FF" />
+            <StatusBar barStyle="dark-content" backgroundColor="#F5FAFA" />
 
             <View style={styles.header}>
                 <View>
@@ -56,7 +56,7 @@ export default function HomeScreen({ navigation }) {
                         Pick a brand, find your nearest store, scan products and pay — no queue needed.
                     </Text>
                     <TouchableOpacity style={styles.ctaBtn} onPress={() => navigation.navigate('BrandSelect')}>
-                        <Icon name="tag" size={16} color="#fff" />
+                        <Icon name="tag" size={16} color="#412402" />
                         <Text style={styles.ctaBtnText}>Select Brand</Text>
                     </TouchableOpacity>
                 </View>
@@ -83,7 +83,7 @@ export default function HomeScreen({ navigation }) {
 
                 {/* History shortcut */}
                 <TouchableOpacity style={styles.histRow} onPress={() => navigation.navigate('History')}>
-                    <Icon name="clock" size={16} color="#6B7280" />
+                    <Icon name="clock" size={16} color="#4E989E" />
                     <Text style={styles.histText}>View past orders</Text>
                     <Icon name="chevron-right" size={16} color="#9CA3AF" />
                 </TouchableOpacity>
@@ -94,29 +94,29 @@ export default function HomeScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-    flex: { flex: 1, backgroundColor: '#F0F4FF' },
+    flex: { flex: 1, backgroundColor: '#F5FAFA' },
     header: {
         flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-        paddingHorizontal: 20, paddingTop: 56, paddingBottom: 20, backgroundColor: '#F0F4FF',
+        paddingHorizontal: 20, paddingTop: 56, paddingBottom: 20, backgroundColor: '#F5FAFA',
     },
     greeting: { fontSize: 14, color: '#6B7280', fontWeight: '500' },
     name: { fontSize: 22, fontWeight: '800', color: '#111827' },
     logoutBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#FEF2F2', justifyContent: 'center', alignItems: 'center' },
     scroll: { paddingHorizontal: 20, paddingBottom: 40 },
     ctaCard: {
-        backgroundColor: '#fff', borderRadius: 20, padding: 24,
+        backgroundColor: '#4E989E', borderRadius: 20, padding: 24,
         alignItems: 'center', marginBottom: 28,
-        shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, elevation: 3,
+        shadowColor: '#36696D', shadowOpacity: 0.25, shadowRadius: 14, elevation: 5,
     },
     ctaEmoji: { fontSize: 52, marginBottom: 12 },
-    ctaTitle: { fontSize: 20, fontWeight: '800', color: '#111827', marginBottom: 8 },
-    ctaText: { fontSize: 13, color: '#6B7280', textAlign: 'center', lineHeight: 20, marginBottom: 20 },
+    ctaTitle: { fontSize: 20, fontWeight: '800', color: '#FFFFFF', marginBottom: 8 },
+    ctaText: { fontSize: 13, color: 'rgba(255,255,255,0.85)', textAlign: 'center', lineHeight: 20, marginBottom: 20 },
     ctaBtn: {
-        backgroundColor: '#2563EB', flexDirection: 'row', alignItems: 'center',
+        backgroundColor: '#F7B32B', flexDirection: 'row', alignItems: 'center',
         gap: 8, paddingHorizontal: 24, paddingVertical: 13, borderRadius: 14,
-        shadowColor: '#2563EB', shadowOpacity: 0.35, shadowRadius: 8, elevation: 4,
+        shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 6, elevation: 3,
     },
-    ctaBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+    ctaBtnText: { color: '#412402', fontWeight: '700', fontSize: 15 },
     sectionTitle: { fontSize: 15, fontWeight: '700', color: '#111827', marginBottom: 12 },
     stepsCard: {
         backgroundColor: '#fff', borderRadius: 16, padding: 18,
@@ -124,8 +124,8 @@ const styles = StyleSheet.create({
         gap: 16, marginBottom: 16,
     },
     stepRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-    stepNum: { width: 28, height: 28, borderRadius: 8, backgroundColor: '#EFF6FF', justifyContent: 'center', alignItems: 'center' },
-    stepN: { fontSize: 13, fontWeight: '800', color: '#2563EB' },
+    stepNum: { width: 28, height: 28, borderRadius: 8, backgroundColor: '#EAF5F5', justifyContent: 'center', alignItems: 'center' },
+    stepN: { fontSize: 13, fontWeight: '800', color: '#4E989E' },
     stepIcon: { fontSize: 20 },
     stepTitle: { fontSize: 13, fontWeight: '700', color: '#111827' },
     stepSub: { fontSize: 12, color: '#6B7280', marginTop: 1 },
@@ -134,5 +134,5 @@ const styles = StyleSheet.create({
         backgroundColor: '#fff', borderRadius: 12, padding: 14,
         shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 6, elevation: 1,
     },
-    histText: { flex: 1, fontSize: 13, color: '#6B7280', fontWeight: '500' },
+    histText: { flex: 1, fontSize: 13, color: '#374151', fontWeight: '500' },
 });

@@ -2,13 +2,14 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ActivityIndicator, Alert, KeyboardAvoidingView, Platform,
-  ImageBackground, Dimensions, Animated,
+  ImageBackground, Dimensions, Animated, StatusBar,
 } from 'react-native';
 import { Feather as Icon } from '@expo/vector-icons';
 import { verifyOtp, resendOtp } from '../../services/api';
 import { useAuth } from '../../store/AuthContext';
 
-const { width, height } = Dimensions.get('window');
+// 'screen' se status bar aur navigation bar sahit poori physical display milti hai
+const { width, height } = Dimensions.get('screen');
 
 export default function OtpScreen({ navigation, route }) {
   const { phone, expirySeconds = 120 } = route.params;
@@ -97,117 +98,125 @@ export default function OtpScreen({ navigation, route }) {
   const fmt = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
   return (
-      <ImageBackground
-          source={require('../../../assets/Background _image.png')}
-          style={styles.fullScreenBg}
-          resizeMode="cover"
-      >
-        <KeyboardAvoidingView
-            style={styles.flex}
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      <View style={styles.root}>
+        {/* Edge-to-edge transparent status bar */}
+        <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
+
+        {/* 100% Full-Screen Pattern Background */}
+        <ImageBackground
+            source={require('../../../assets/Background _image.png')}
+            style={styles.fullScreenBg}
+            resizeMode="cover"
         >
-          <View style={styles.container}>
-
-            {/* Back Button */}
-            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.back}>
-              <Icon name="arrow-left" size={24} color="#FFFFFF" />
-            </TouchableOpacity>
-
-            {/* Form Card */}
-            <Animated.View
-                style={[
-                  styles.card,
-                  {
-                    opacity: cardFade,
-                    transform: [{ translateY: cardTranslateY }],
-                  },
-                ]}
-            >
-              <Text style={styles.title}>Verify OTP</Text>
-              <Text style={styles.sub}>
-                Sent to <Text style={styles.phone}>+91 {phone}</Text>
-              </Text>
-              <Text style={styles.pasteHint}>Enter the 6-digit code sent to your phone</Text>
-
-              {/* Hidden real input + 6 Display Boxes */}
-              <TouchableOpacity
-                  activeOpacity={1}
-                  onPress={() => inputRef.current?.focus()}
-                  style={styles.otpRow}
-              >
-                <TextInput
-                    ref={inputRef}
-                    value={otp}
-                    onChangeText={handleChange}
-                    keyboardType="number-pad"
-                    maxLength={6}
-                    textContentType="oneTimeCode"
-                    autoComplete="sms-otp"
-                    autoFocus
-                    style={styles.hiddenInput}
-                    editable={!loading}
-                />
-                {[0, 1, 2, 3, 4, 5].map((i) => (
-                    <View
-                        key={i}
-                        style={[
-                          styles.box,
-                          otp.length > i && styles.boxFilled,
-                          otp.length === i && styles.boxFocused,
-                        ]}
-                    >
-                      <Text style={styles.boxText}>{otp[i] || ''}</Text>
-                      {otp.length === i && <View style={styles.cursor} />}
-                    </View>
-                ))}
+          <KeyboardAvoidingView
+              style={styles.flex}
+              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          >
+            <View style={styles.container}>
+              {/* Back Button */}
+              <TouchableOpacity onPress={() => navigation.goBack()} style={styles.back}>
+                <Icon name="arrow-left" size={24} color="#FFFFFF" />
               </TouchableOpacity>
 
-              {/* Expiry Timer */}
-              <Text style={styles.timer}>
-                {timer > 0 ? `Expires in ${fmt(timer)}` : 'OTP expired'}
-              </Text>
+              {/* Form Card */}
+              <Animated.View
+                  style={[
+                    styles.card,
+                    {
+                      opacity: cardFade,
+                      transform: [{ translateY: cardTranslateY }],
+                    },
+                  ]}
+              >
+                <Text style={styles.title}>Verify OTP</Text>
+                <Text style={styles.sub}>
+                  Sent to <Text style={styles.phone}>+91 {phone}</Text>
+                </Text>
+                <Text style={styles.pasteHint}>Enter the 6-digit code sent to your phone</Text>
 
-              {/* Verify Button */}
-              <Animated.View style={{ transform: [{ scale: btnScale }] }}>
+                {/* Hidden real input + 6 Display Boxes */}
                 <TouchableOpacity
-                    style={[styles.btn, (otp.length < 6 || loading) && styles.btnOff]}
-                    onPress={() => verify()}
-                    onPressIn={onPressIn}
-                    onPressOut={onPressOut}
-                    disabled={otp.length < 6 || loading}
-                    activeOpacity={0.9}
+                    activeOpacity={1}
+                    onPress={() => inputRef.current?.focus()}
+                    style={styles.otpRow}
                 >
-                  {loading ? (
-                      <ActivityIndicator color="#fff" />
+                  <TextInput
+                      ref={inputRef}
+                      value={otp}
+                      onChangeText={handleChange}
+                      keyboardType="number-pad"
+                      maxLength={6}
+                      textContentType="oneTimeCode"
+                      autoComplete="sms-otp"
+                      autoFocus
+                      style={styles.hiddenInput}
+                      editable={!loading}
+                  />
+                  {[0, 1, 2, 3, 4, 5].map((i) => (
+                      <View
+                          key={i}
+                          style={[
+                            styles.box,
+                            otp.length > i && styles.boxFilled,
+                            otp.length === i && styles.boxFocused,
+                          ]}
+                      >
+                        <Text style={styles.boxText}>{otp[i] || ''}</Text>
+                        {otp.length === i && <View style={styles.cursor} />}
+                      </View>
+                  ))}
+                </TouchableOpacity>
+
+                {/* Expiry Timer */}
+                <Text style={styles.timer}>
+                  {timer > 0 ? `Expires in ${fmt(timer)}` : 'OTP expired'}
+                </Text>
+
+                {/* Verify Button */}
+                <Animated.View style={{ transform: [{ scale: btnScale }] }}>
+                  <TouchableOpacity
+                      style={[styles.btn, (otp.length < 6 || loading) && styles.btnOff]}
+                      onPress={() => verify()}
+                      onPressIn={onPressIn}
+                      onPressOut={onPressOut}
+                      disabled={otp.length < 6 || loading}
+                      activeOpacity={0.9}
+                  >
+                    {loading ? (
+                        <ActivityIndicator color="#fff" />
+                    ) : (
+                        <Text style={styles.btnText}>Verify & Continue</Text>
+                    )}
+                  </TouchableOpacity>
+                </Animated.View>
+
+                {/* Resend Action */}
+                <TouchableOpacity
+                    onPress={handleResend}
+                    disabled={timer > 0 || resending}
+                    style={styles.resendBtn}
+                >
+                  {resending ? (
+                      <ActivityIndicator size="small" color="#4E989E" />
                   ) : (
-                      <Text style={styles.btnText}>Verify & Continue</Text>
+                      <Text style={[styles.resendText, timer > 0 && styles.resendOff]}>
+                        {timer > 0 ? `Resend in ${fmt(timer)}` : 'Resend OTP'}
+                      </Text>
                   )}
                 </TouchableOpacity>
               </Animated.View>
-
-              {/* Resend Action */}
-              <TouchableOpacity
-                  onPress={handleResend}
-                  disabled={timer > 0 || resending}
-                  style={styles.resendBtn}
-              >
-                {resending ? (
-                    <ActivityIndicator size="small" color="#4E989E" />
-                ) : (
-                    <Text style={[styles.resendText, timer > 0 && styles.resendOff]}>
-                      {timer > 0 ? `Resend in ${fmt(timer)}` : 'Resend OTP'}
-                    </Text>
-                )}
-              </TouchableOpacity>
-            </Animated.View>
-
-          </View>
-        </KeyboardAvoidingView>
-      </ImageBackground>
+            </View>
+          </KeyboardAvoidingView>
+        </ImageBackground>
+      </View>
   );
 }
 
 const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: '#69AEB4',
+  },
   fullScreenBg: {
     width: width,
     height: height,
