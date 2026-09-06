@@ -7,10 +7,11 @@ import { Feather as Icon } from '@expo/vector-icons';
 import { useAuth } from '../store/AuthContext';
 
 // Screens
-import SplashScreen     from '../screens/Loading/SplashScreen'; // <-- Step 2 wala screen file
+import SplashScreen     from '../screens/Loading/SplashScreen';
 import LoginScreen      from '../screens/Auth/LoginScreen';
 import OtpScreen        from '../screens/Auth/OtpScreen';
 import HomeScreen       from '../screens/Home/HomeScreen';
+import ProfileScreen    from '../screens/Profile/ProfileScreen'; // <-- Profile Screen Add Kiya
 import BrandSelectScreen from '../screens/Brand/Brandselectscreen';
 import StoreSelectScreen from '../screens/Store/StoreSelectScreen';
 import StoreHomeScreen  from '../screens/Store/StoreHomeScreen';
@@ -49,6 +50,7 @@ function MainTabs() {
                         Home: 'home',
                         Cart: 'shopping-cart',
                         History: 'clock',
+                        Profile: 'user', // Profile icon
                     };
 
                     return (
@@ -64,6 +66,7 @@ function MainTabs() {
             <Tab.Screen name="Home" component={HomeScreen} />
             <Tab.Screen name="Cart" component={CartScreen} />
             <Tab.Screen name="History" component={HistoryScreen} />
+            <Tab.Screen name="Profile" component={ProfileScreen} />
         </Tab.Navigator>
     );
 }
@@ -72,6 +75,7 @@ function AppStack() {
     return (
         <Stack.Navigator screenOptions={{ headerShown: false }}>
             <Stack.Screen name="MainTabs"       component={MainTabs} />
+            <Stack.Screen name="Profile"        component={ProfileScreen} />
             <Stack.Screen name="BrandSelect"    component={BrandSelectScreen} />
             <Stack.Screen name="StoreSelect"    component={StoreSelectScreen} />
             <Stack.Screen name="StoreHome"      component={StoreHomeScreen} />
@@ -88,7 +92,7 @@ function AppStack() {
 function AuthStack() {
     return (
         <Stack.Navigator screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="Splash" component={SplashScreen} />
+            {/* Splash se aane ke baad seedha Login pehle render hoga */}
             <Stack.Screen name="Login"  component={LoginScreen} />
             <Stack.Screen name="Otp"    component={OtpScreen} />
         </Stack.Navigator>
@@ -99,7 +103,7 @@ export default function AppNavigator() {
     const { user, isLoading } = useAuth();
     const [isSplashDone, setIsSplashDone] = useState(false);
 
-    // Jab tak auth check ho raha hai ya initial splash time chal raha hai
+    // Initial Splash Screen tab tak chalega jab tak auth check na ho jaye
     if (isLoading || !isSplashDone) {
         return (
             <SafeAreaProvider>
