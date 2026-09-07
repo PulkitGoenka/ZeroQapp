@@ -20,6 +20,7 @@ import PaymentScreen         from '../screens/Payment/PaymentScreen';
 import OnlineCheckoutScreen  from '../screens/Payment/OnlineCheckoutScreen';
 import PaymentQrScreen       from '../screens/Payment/PaymentQrScreen';
 import HistoryScreen         from '../screens/History/HistoryScreen';
+import ReceiptScreen from '../screens/History/ReceiptScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab   = createBottomTabNavigator();
@@ -81,6 +82,10 @@ function AppStack() {
             <Stack.Screen name="StoreHome"      component={StoreHomeScreen} />
             <Stack.Screen name="Cart"           component={CartScreen} />
             <Stack.Screen name="History"        component={HistoryScreen} />
+
+
+            // Stack.Navigator ke andar:
+            <Stack.Screen name="Receipt" component={ReceiptScreen} />
             <Stack.Screen name="Scanner"        component={ScannerScreen} />
             <Stack.Screen name="Payment"        component={PaymentScreen} />
             <Stack.Screen name="OnlineCheckout" component={OnlineCheckoutScreen} />

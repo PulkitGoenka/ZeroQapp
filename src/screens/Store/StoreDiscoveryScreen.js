@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
     View, Text, TextInput, TouchableOpacity, StyleSheet,
     ScrollView, ActivityIndicator, Alert, Modal,
+    KeyboardAvoidingView, Platform
 } from 'react-native';
 import { Feather as Icon } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -21,6 +22,8 @@ const INK = '#111827';
 const MUTED = '#6B7280';
 const PLACEHOLDER = '#9CA3AF';
 const BORDER = '#E5E7EB';
+const RED_SOFT = '#FEE2E2';
+const RED = '#EF4444';
 
 const BRAND_TINTS = ['#4E989E', '#3F7276', '#6BAAAF', '#2E5457', '#5C9FA4', '#457D81'];
 const TABS = ['Pincode', 'District', 'State'];
@@ -36,7 +39,7 @@ export default function StoreDiscoveryScreen({ navigation }) {
     const [selectedBrand, setSelectedBrand] = useState(null);
 
     // Manual finder
-    const [tab, setTab] = useState(0); // 0 pincode, 1 district, 2 state
+    const [tab, setTab] = useState(0);
     const [pincode, setPincode] = useState('');
     const [district, setDistrict] = useState('');
     const [state, setState] = useState('');
@@ -44,6 +47,10 @@ export default function StoreDiscoveryScreen({ navigation }) {
     const [searching, setSearching] = useState(false);
     const [hasSearched, setHasSearched] = useState(false);
     const [starting, setStarting] = useState(null);
+
+    // Exit Modal State
+    const [showExitModal, setShowExitModal] = useState(false);
+    const [endingSession, setEndingSession] = useState(false);
 
     // QR
     const [qrOpen, setQrOpen] = useState(false);
@@ -66,8 +73,8 @@ export default function StoreDiscoveryScreen({ navigation }) {
         setStores([]);
         setHasSearched(false);
         setTimeout(() => {
-            scrollRef.current?.scrollTo({ y: finderY.current, animated: true });
-        }, 100);
+            scrollRef.current?.scrollTo({ y: finderY.current - 20, animated: true });
+        }, 150);
     };
 
     const clearBrand = () => {
@@ -152,23 +159,28 @@ export default function StoreDiscoveryScreen({ navigation }) {
 
     const handleBack = () => {
         if (session) {
-            Alert.alert('Active Session Running', `You are currently shopping at ${session.storeName}. Exiting now will end your active shopping session.`, [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'End Session', style: 'destructive', onPress: async () => {
-                        try { await endSession(); } catch {}
-                        await clearSession();
-                        navigation.goBack();
-                    },
-                },
-            ]);
+            setShowExitModal(true);
         } else {
             navigation.goBack();
         }
     };
 
+    const confirmEndSession = async () => {
+        setEndingSession(true);
+        try {
+            await endSession();
+        } catch {}
+        await clearSession();
+        setEndingSession(false);
+        setShowExitModal(false);
+        navigation.goBack();
+    };
+
     return (
-        <View style={styles.flex}>
+        <KeyboardAvoidingView
+            style={styles.flex}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
             <View style={styles.header}>
                 <TouchableOpacity onPress={handleBack} style={styles.backBtn}>
                     <Icon name="arrow-left" size={20} color={INK} />
@@ -180,8 +192,13 @@ export default function StoreDiscoveryScreen({ navigation }) {
                 <View style={{ width: 36 }} />
             </View>
 
-            <ScrollView ref={scrollRef} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-
+            <ScrollView
+                ref={scrollRef}
+                contentContainerStyle={styles.scroll}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="on-drag"
+                showsVerticalScrollIndicator={false}
+            >
                 {/* QR Card */}
                 <View style={styles.qrCard}>
                     <View style={styles.qrCardRow}>
@@ -204,7 +221,7 @@ export default function StoreDiscoveryScreen({ navigation }) {
                     <View style={styles.divLine} />
                 </View>
 
-                {/* Brand row — real API data, horizontal scroll */}
+                {/* Brand row */}
                 <View style={styles.rowBetween}>
                     <Text style={styles.sectionLabel}>Select a brand</Text>
                     <Text style={styles.countLabel}>{brands.length} available</Text>
@@ -250,7 +267,7 @@ export default function StoreDiscoveryScreen({ navigation }) {
                     </ScrollView>
                 )}
 
-                {/* Manual finder — appears once a brand is picked */}
+                {/* Manual finder */}
                 {selectedBrand && (
                     <View
                         style={styles.finder}
@@ -288,6 +305,11 @@ export default function StoreDiscoveryScreen({ navigation }) {
                             value={val}
                             onChangeText={setVal}
                             autoCapitalize={tab === 0 ? 'none' : 'words'}
+                            onFocus={() => {
+                                setTimeout(() => {
+                                    scrollRef.current?.scrollTo({ y: finderY.current, animated: true });
+                                }, 200);
+                            }}
                         />
 
                         <TouchableOpacity
@@ -334,6 +356,46 @@ export default function StoreDiscoveryScreen({ navigation }) {
                 )}
             </ScrollView>
 
+            {/* Custom Session Exit Confirmation Modal */}
+            <Modal
+                visible={showExitModal}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setShowExitModal(false)}
+            >
+                <View style={styles.modalBackdrop}>
+                    <View style={styles.dialogCard}>
+                        <View style={styles.dialogIconWrap}>
+                            <Icon name="alert-triangle" size={26} color={RED} />
+                        </View>
+                        <Text style={styles.dialogTitle}>Active Session Running</Text>
+                        <Text style={styles.dialogBody}>
+                            You are currently checked in at <Text style={styles.dialogHighlight}>{session?.storeName || 'the store'}</Text>. Exiting now will cancel and end your shopping session.
+                        </Text>
+                        <View style={styles.dialogActions}>
+                            <TouchableOpacity
+                                style={styles.dialogCancelBtn}
+                                onPress={() => setShowExitModal(false)}
+                                disabled={endingSession}
+                            >
+                                <Text style={styles.dialogCancelText}>Stay</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={styles.dialogDestructBtn}
+                                onPress={confirmEndSession}
+                                disabled={endingSession}
+                            >
+                                {endingSession ? (
+                                    <ActivityIndicator size="small" color="#fff" />
+                                ) : (
+                                    <Text style={styles.dialogDestructText}>End Session</Text>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
             {/* QR Modal */}
             <Modal visible={qrOpen} animationType="slide" onRequestClose={() => setQrOpen(false)}>
                 <View style={{ flex: 1, backgroundColor: '#000' }}>
@@ -358,7 +420,7 @@ export default function StoreDiscoveryScreen({ navigation }) {
                     </View>
                 </View>
             </Modal>
-        </View>
+        </KeyboardAvoidingView>
     );
 }
 
@@ -372,7 +434,7 @@ const styles = StyleSheet.create({
     backBtn: { width: 36, height: 36, justifyContent: 'center', alignItems: 'center' },
     headerTitle: { fontSize: 18, fontWeight: '800', color: INK },
     headerSub: { fontSize: 12, color: MUTED, marginTop: 2, fontWeight: '500' },
-    scroll: { paddingHorizontal: 20, paddingBottom: 48 },
+    scroll: { paddingHorizontal: 20, paddingBottom: 100 },
 
     qrCard: { backgroundColor: TEAL, borderRadius: 20, padding: 20, marginTop: 6, shadowColor: TEAL_SHADOW, shadowOpacity: 0.25, shadowRadius: 14, elevation: 5 },
     qrCardRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
@@ -432,6 +494,19 @@ const styles = StyleSheet.create({
     noResults: { backgroundColor: '#fff', borderRadius: 16, padding: 24, alignItems: 'center', marginTop: 20, borderWidth: 1, borderColor: '#F3F4F6', gap: 8 },
     noResultsTitle: { fontSize: 15, fontWeight: '700', color: INK },
     noResultsSub: { fontSize: 12, color: MUTED, lineHeight: 18, textAlign: 'center' },
+
+    // Custom Exit Modal UI
+    modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 },
+    dialogCard: { width: '100%', maxWidth: 340, backgroundColor: '#fff', borderRadius: 24, padding: 24, alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 18, elevation: 10 },
+    dialogIconWrap: { width: 56, height: 56, borderRadius: 28, backgroundColor: RED_SOFT, justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
+    dialogTitle: { fontSize: 18, fontWeight: '800', color: INK, marginBottom: 8, textAlign: 'center' },
+    dialogBody: { fontSize: 13, color: MUTED, textAlign: 'center', lineHeight: 20, marginBottom: 24 },
+    dialogHighlight: { fontWeight: '700', color: INK },
+    dialogActions: { flexDirection: 'row', gap: 12, width: '100%' },
+    dialogCancelBtn: { flex: 1, paddingVertical: 13, borderRadius: 12, backgroundColor: '#F3F4F6', alignItems: 'center', justifyContent: 'center' },
+    dialogCancelText: { fontSize: 14, fontWeight: '700', color: MUTED },
+    dialogDestructBtn: { flex: 1, paddingVertical: 13, borderRadius: 12, backgroundColor: RED, alignItems: 'center', justifyContent: 'center' },
+    dialogDestructText: { fontSize: 14, fontWeight: '700', color: '#fff' },
 
     qrModalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 52, paddingBottom: 16, zIndex: 10 },
     qrClose: { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },

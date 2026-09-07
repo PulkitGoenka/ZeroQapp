@@ -1,196 +1,515 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, FlatList,
-  ActivityIndicator, Alert, StatusBar,
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  FlatList,
+  ActivityIndicator,
+  StatusBar,
+  Modal,
 } from 'react-native';
 import { Feather as Icon } from '@expo/vector-icons';
 import { useAuth } from '../../store/AuthContext';
 import { getCart, updateQuantity, removeItem, endSession } from '../../services/api';
 
+const TEAL = '#4E989E';
+const TEAL_SOFT = '#EAF5F5';
+const TEAL_SHADOW = '#36696D';
+const GOLD = '#F7B32B';
+const BG = '#F5FAFA';
+const INK = '#111827';
+const BODY = '#374151';
+const MUTED = '#6B7280';
+const BORDER = '#E5E7EB';
+const CARD_BG = '#FFFFFF';
+const DANGER = '#EF4444';
+const DANGER_SOFT = '#FEF2F2';
+const SUCCESS = '#059669';
+const SUCCESS_SOFT = '#ECFDF5';
+
 export default function CartScreen({ navigation }) {
   const { session, clearSession } = useAuth();
-  const [cart, setCart]       = useState(null);
+  const [cart, setCart] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [updating, setUpdating] = useState(null);
+  const [updatingBarcode, setUpdatingBarcode] = useState(null);
+  const [exitModalVisible, setExitModalVisible] = useState(false);
 
-  const load = useCallback(async () => {
-    if (!session) { setLoading(false); return; }
-    try { const r = await getCart(); setCart(r.data); }
-    catch (e) { Alert.alert('Error', e.message); }
-    finally { setLoading(false); }
+  const loadCartData = useCallback(async () => {
+    if (!session) {
+      setLoading(false);
+      return;
+    }
+    try {
+      const res = await getCart();
+      setCart(res?.data || null);
+    } catch (e) {
+      console.log('Cart fetch error:', e.message);
+    } finally {
+      setLoading(false);
+    }
   }, [session]);
 
   useEffect(() => {
-    load();
-    const unsub = navigation.addListener('focus', load);
-    return unsub;
-  }, [navigation, load]);
+    loadCartData();
+    const unsubscribe = navigation.addListener('focus', loadCartData);
+    return unsubscribe;
+  }, [navigation, loadCartData]);
 
-  const handleQty = async (barcode, qty) => {
-    setUpdating(barcode);
+  const handleUpdateQuantity = async (barcode, qty) => {
+    setUpdatingBarcode(barcode);
     try {
-      qty === 0 ? await removeItem(barcode) : await updateQuantity(barcode, qty);
-      await load();
-    } catch (e) { Alert.alert('Error', e.message); }
-    finally { setUpdating(null); }
+      if (qty <= 0) {
+        await removeItem(barcode);
+      } else {
+        await updateQuantity(barcode, qty);
+      }
+      await loadCartData();
+    } catch (e) {
+      console.log('Qty update error:', e.message);
+    } finally {
+      setUpdatingBarcode(null);
+    }
   };
 
-  const handleEnd = () => Alert.alert('End session', 'Clear cart and end session?', [
-    { text: 'Cancel', style: 'cancel' },
-    { text: 'End', style: 'destructive', onPress: async () => {
-        try { await endSession(); } catch {}
-        await clearSession();
-        navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
-      }},
-  ]);
+  const handleConfirmEndSession = async () => {
+    try {
+      await endSession();
+    } catch {}
+    await clearSession();
+    setExitModalVisible(false);
+    navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
+  };
 
-  if (!session) return (
-      <View style={styles.empty}>
-        <View style={styles.emptyIcon}><Icon name="shopping-cart" size={36} color="#9CA3AF" /></View>
-        <Text style={styles.emptyTitle}>No active session</Text>
-        <Text style={styles.emptySub}>Select a brand and store to start shopping.</Text>
-        <TouchableOpacity style={styles.emptyBtn} onPress={() => navigation.navigate('StoreDiscovery')}>
-          <Icon name="tag" size={14} color="#fff" />
-          <Text style={styles.emptyBtnText}>Select Brand</Text>
-        </TouchableOpacity>
-      </View>
-  );
+  // State A: User is not checked into any store
+  if (!session) {
+    return (
+        <View style={styles.flex}>
+          <StatusBar barStyle="dark-content" backgroundColor={BG} />
+          <View style={styles.emptyContainer}>
+            <View style={styles.emptyIconBadge}>
+              <Icon name="shopping-bag" size={36} color={TEAL} />
+            </View>
+            <Text style={styles.emptyTitle}>No Active Store Session</Text>
+            <Text style={styles.emptySubtitle}>
+              Please select a brand and locate a store to begin adding items to your cart.
+            </Text>
+            <TouchableOpacity
+                style={styles.actionButton}
+                onPress={() => navigation.navigate('StoreDiscovery')}
+                activeOpacity={0.85}
+            >
+              <Icon name="tag" size={16} color="#412402" />
+              <Text style={styles.actionButtonText}>Select Brand & Store</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+    );
+  }
 
-  if (loading) return <View style={styles.center}><ActivityIndicator size="large" color="#2563EB" /></View>;
+  if (loading) {
+    return (
+        <View style={[styles.flex, styles.center]}>
+          <ActivityIndicator size="large" color={TEAL} />
+        </View>
+    );
+  }
 
   const items = cart?.items || [];
+  const totalAmount = cart?.totalAmount || 0;
+  const totalDiscount = cart?.totalDiscount || 0;
 
   return (
       <View style={styles.flex}>
-        <StatusBar barStyle="dark-content" backgroundColor="#fff" />
+        <StatusBar barStyle="dark-content" backgroundColor={CARD_BG} />
 
+        {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-            <Icon name="arrow-left" size={20} color="#374151" />
+          <TouchableOpacity
+              onPress={() => navigation.goBack()}
+              style={styles.headerIconBtn}
+              activeOpacity={0.7}
+          >
+            <Icon name="arrow-left" size={20} color={INK} />
           </TouchableOpacity>
           <View style={styles.headerCenter}>
-            <Text style={styles.headerTitle}>My Cart</Text>
-            <Text style={styles.headerSub}>{session.storeName}</Text>
+            <Text style={styles.headerTitle}>Active Cart</Text>
+            <Text style={styles.headerSub} numberOfLines={1}>{session.storeName}</Text>
           </View>
-          <TouchableOpacity onPress={handleEnd} style={styles.endBtn}>
-            <Icon name="x" size={16} color="#EF4444" />
+          <TouchableOpacity
+              onPress={() => setExitModalVisible(true)}
+              style={styles.headerExitBtn}
+              activeOpacity={0.7}
+          >
+            <Icon name="log-out" size={16} color={DANGER} />
           </TouchableOpacity>
         </View>
 
+        {/* Empty State */}
         {items.length === 0 ? (
-            <View style={styles.empty}>
-              <View style={styles.emptyIcon}><Icon name="shopping-cart" size={36} color="#9CA3AF" /></View>
-              <Text style={styles.emptyTitle}>Cart is empty</Text>
-              <Text style={styles.emptySub}>Scan products to add them here.</Text>
-              <TouchableOpacity style={styles.emptyBtn} onPress={() => navigation.navigate('Scanner')}>
-                <Icon name="camera" size={14} color="#fff" />
-                <Text style={styles.emptyBtnText}>Scan Products</Text>
+            <View style={styles.emptyContainer}>
+              <View style={styles.emptyIconBadge}>
+                <Icon name="shopping-cart" size={36} color={TEAL} />
+              </View>
+              <Text style={styles.emptyTitle}>Your Cart is Empty</Text>
+              <Text style={styles.emptySubtitle}>
+                Scan barcodes directly off supermarket shelves to populate your digital cart.
+              </Text>
+              <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={() => navigation.navigate('Scanner')}
+                  activeOpacity={0.85}
+              >
+                <Icon name="camera" size={16} color="#412402" />
+                <Text style={styles.actionButtonText}>Scan Items</Text>
               </TouchableOpacity>
             </View>
         ) : (
             <>
               <FlatList
                   data={items}
-                  keyExtractor={i => i.barcode}
-                  contentContainerStyle={styles.list}
+                  keyExtractor={(i) => i.barcode}
+                  contentContainerStyle={styles.listContent}
                   showsVerticalScrollIndicator={false}
-                  renderItem={({ item }) => (
-                      <View style={styles.item}>
-                        <View style={styles.itemImg}><Icon name="package" size={20} color="#9CA3AF" /></View>
-                        <View style={styles.itemInfo}>
-                          <Text style={styles.itemName} numberOfLines={2}>{item.productName}</Text>
-                          <View style={styles.priceRow}>
-                            <Text style={styles.itemPrice}>₹{item.discountPrice}</Text>
-                            {item.mrp && item.mrp !== item.discountPrice &&
-                                <Text style={styles.itemMrp}>₹{item.mrp}</Text>}
+                  renderItem={({ item }) => {
+                    const isUpdating = updatingBarcode === item.barcode;
+                    return (
+                        <View style={styles.itemCard}>
+                          <View style={styles.itemThumb}>
+                            <Icon name="package" size={22} color={TEAL} />
+                          </View>
+                          <View style={styles.itemDetails}>
+                            <Text style={styles.itemName} numberOfLines={2}>{item.productName}</Text>
+                            <View style={styles.priceRow}>
+                              <Text style={styles.itemPrice}>₹{item.discountPrice}</Text>
+                              {item.mrp && item.mrp !== item.discountPrice && (
+                                  <Text style={styles.itemMrp}>₹{item.mrp}</Text>
+                              )}
+                            </View>
+                          </View>
+
+                          <View style={styles.qtyControl}>
+                            <TouchableOpacity
+                                style={styles.qtyBtn}
+                                onPress={() => handleUpdateQuantity(item.barcode, item.quantity - 1)}
+                                disabled={isUpdating}
+                            >
+                              <Icon
+                                  name={item.quantity === 1 ? 'trash-2' : 'minus'}
+                                  size={13}
+                                  color={item.quantity === 1 ? DANGER : BODY}
+                              />
+                            </TouchableOpacity>
+                            {isUpdating ? (
+                                <ActivityIndicator size="small" color={TEAL} style={{ width: 24 }} />
+                            ) : (
+                                <Text style={styles.qtyNumber}>{item.quantity}</Text>
+                            )}
+                            <TouchableOpacity
+                                style={styles.qtyBtn}
+                                onPress={() => handleUpdateQuantity(item.barcode, item.quantity + 1)}
+                                disabled={isUpdating}
+                            >
+                              <Icon name="plus" size={13} color={BODY} />
+                            </TouchableOpacity>
                           </View>
                         </View>
-                        <View style={styles.qtyRow}>
-                          <TouchableOpacity style={styles.qtyBtn}
-                                            onPress={() => handleQty(item.barcode, item.quantity - 1)}
-                                            disabled={updating === item.barcode}>
-                            <Icon name={item.quantity === 1 ? 'trash-2' : 'minus'} size={14}
-                                  color={item.quantity === 1 ? '#EF4444' : '#374151'} />
-                          </TouchableOpacity>
-                          {updating === item.barcode
-                              ? <ActivityIndicator size="small" color="#2563EB" style={{ width: 28 }} />
-                              : <Text style={styles.qtyNum}>{item.quantity}</Text>}
-                          <TouchableOpacity style={styles.qtyBtn}
-                                            onPress={() => handleQty(item.barcode, item.quantity + 1)}
-                                            disabled={updating === item.barcode}>
-                            <Icon name="plus" size={14} color="#374151" />
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                  )}
+                    );
+                  }}
               />
 
-              <View style={styles.footer}>
-                <View style={styles.totalRow}>
+              {/* Checkout Footer */}
+              <View style={styles.footerContainer}>
+                <View style={styles.billingRow}>
                   <View>
-                    <Text style={styles.totalLabel}>Total</Text>
-                    <Text style={styles.totalAmt}>₹{cart?.totalAmount || 0}</Text>
+                    <Text style={styles.totalLabel}>Total Payable</Text>
+                    <Text style={styles.totalValue}>₹{totalAmount}</Text>
                   </View>
-                  {cart?.totalDiscount > 0 &&
-                      <View style={styles.saveBadge}><Text style={styles.saveText}>Save ₹{cart.totalDiscount}</Text></View>}
+                  {totalDiscount > 0 && (
+                      <View style={styles.savingsPill}>
+                        <Icon name="trending-down" size={12} color={SUCCESS} style={{ marginRight: 4 }} />
+                        <Text style={styles.savingsText}>Save ₹{totalDiscount}</Text>
+                      </View>
+                  )}
                 </View>
-                <TouchableOpacity style={styles.scanMore} onPress={() => navigation.navigate('Scanner')}>
-                  <Icon name="camera" size={14} color="#2563EB" />
-                  <Text style={styles.scanMoreText}>Scan more products</Text>
+
+                <TouchableOpacity
+                    style={styles.scanMoreLink}
+                    onPress={() => navigation.navigate('Scanner')}
+                    activeOpacity={0.7}
+                >
+                  <Icon name="camera" size={15} color={TEAL} />
+                  <Text style={styles.scanMoreText}>Scan More Items</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.payBtn} onPress={() => navigation.navigate('Payment')}>
-                  <Icon name="credit-card" size={18} color="#fff" />
-                  <Text style={styles.payBtnText}>Proceed to Pay</Text>
+
+                <TouchableOpacity
+                    style={styles.proceedButton}
+                    onPress={() => navigation.navigate('Payment')}
+                    activeOpacity={0.85}
+                >
+                  <Icon name="credit-card" size={17} color="#FFFFFF" />
+                  <Text style={styles.proceedButtonText}>Proceed to Checkout</Text>
                 </TouchableOpacity>
               </View>
             </>
         )}
+
+        {/* End Session Confirmation Modal */}
+        <Modal
+            visible={exitModalVisible}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setExitModalVisible(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalCard}>
+              <View style={styles.modalIconBox}>
+                <Icon name="log-out" size={24} color={DANGER} />
+              </View>
+              <Text style={styles.modalTitle}>End Session & Clear Cart?</Text>
+              <Text style={styles.modalText}>
+                All unpurchased items in this cart will be deleted upon exiting.
+              </Text>
+              <View style={styles.modalButtonRow}>
+                <TouchableOpacity
+                    style={styles.modalSecondaryBtn}
+                    onPress={() => setExitModalVisible(false)}
+                >
+                  <Text style={styles.modalSecondaryText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                    style={styles.modalDangerBtn}
+                    onPress={handleConfirmEndSession}
+                >
+                  <Text style={styles.modalDangerText}>End Session</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </View>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: '#F9FAFB' },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  flex: { flex: 1, backgroundColor: BG },
+  center: { justifyContent: 'center', alignItems: 'center' },
+
   header: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    paddingHorizontal: 16, paddingTop: 52, paddingBottom: 14,
-    backgroundColor: '#fff', borderBottomWidth: 0.5, borderBottomColor: '#E5E7EB',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 54,
+    paddingBottom: 14,
+    backgroundColor: CARD_BG,
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER,
   },
-  backBtn: { width: 36, height: 36, justifyContent: 'center', alignItems: 'center' },
-  headerCenter: { flex: 1 },
-  headerTitle: { fontSize: 17, fontWeight: '700', color: '#111827' },
-  headerSub: { fontSize: 12, color: '#6B7280', marginTop: 1 },
-  endBtn: { width: 34, height: 34, borderRadius: 8, backgroundColor: '#FEF2F2', justifyContent: 'center', alignItems: 'center' },
-  list: { padding: 16, gap: 10 },
-  item: {
-    backgroundColor: '#fff', borderRadius: 14, padding: 12,
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    borderWidth: 0.5, borderColor: '#E5E7EB',
+  headerIconBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: BG,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  itemImg: { width: 44, height: 44, borderRadius: 10, backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center' },
-  itemInfo: { flex: 1 },
-  itemName: { fontSize: 13, fontWeight: '600', color: '#111827', lineHeight: 18 },
-  priceRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 },
-  itemPrice: { fontSize: 14, fontWeight: '700', color: '#059669' },
-  itemMrp: { fontSize: 12, color: '#9CA3AF', textDecorationLine: 'line-through' },
-  qtyRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  qtyBtn: { width: 30, height: 30, borderRadius: 8, backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center', borderWidth: 0.5, borderColor: '#E5E7EB' },
-  qtyNum: { fontSize: 15, fontWeight: '700', color: '#111827', minWidth: 20, textAlign: 'center' },
-  footer: { backgroundColor: '#fff', borderTopWidth: 0.5, borderTopColor: '#E5E7EB', padding: 16, gap: 10 },
-  totalRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  totalLabel: { fontSize: 12, color: '#6B7280' },
-  totalAmt: { fontSize: 24, fontWeight: '800', color: '#111827' },
-  saveBadge: { backgroundColor: '#ECFDF5', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
-  saveText: { fontSize: 12, fontWeight: '700', color: '#059669' },
-  scanMore: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#EFF6FF', borderRadius: 10, paddingVertical: 10, borderWidth: 1, borderColor: '#BFDBFE' },
-  scanMoreText: { fontSize: 13, fontWeight: '600', color: '#2563EB' },
-  payBtn: { backgroundColor: '#2563EB', borderRadius: 14, height: 52, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, shadowColor: '#2563EB', shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
-  payBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  empty: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32, gap: 12 },
-  emptyIcon: { width: 80, height: 80, borderRadius: 20, backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
-  emptyTitle: { fontSize: 18, fontWeight: '700', color: '#111827' },
-  emptySub: { fontSize: 13, color: '#6B7280', textAlign: 'center' },
-  emptyBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#2563EB', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12, marginTop: 8 },
-  emptyBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  headerCenter: { flex: 1, marginHorizontal: 12 },
+  headerTitle: { fontSize: 16, fontWeight: '800', color: INK },
+  headerSub: { fontSize: 12, color: MUTED, marginTop: 1 },
+  headerExitBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: DANGER_SOFT,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  listContent: { padding: 20, gap: 12 },
+  itemCard: {
+    backgroundColor: CARD_BG,
+    borderRadius: 16,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: BORDER,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
+  },
+  itemThumb: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: TEAL_SOFT,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  itemDetails: { flex: 1, marginRight: 8 },
+  itemName: { fontSize: 13, fontWeight: '700', color: INK, lineHeight: 18 },
+  priceRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
+  itemPrice: { fontSize: 14, fontWeight: '800', color: SUCCESS },
+  itemMrp: { fontSize: 12, color: MUTED, textDecorationLine: 'line-through' },
+
+  qtyControl: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: BG,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: BORDER,
+    padding: 3,
+  },
+  qtyBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: CARD_BG,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  qtyNumber: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: INK,
+    minWidth: 24,
+    textAlign: 'center',
+  },
+
+  footerContainer: {
+    backgroundColor: CARD_BG,
+    borderTopWidth: 1,
+    borderTopColor: BORDER,
+    padding: 20,
+    gap: 12,
+  },
+  billingRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  totalLabel: { fontSize: 12, color: MUTED, fontWeight: '500' },
+  totalValue: { fontSize: 22, fontWeight: '800', color: INK, marginTop: 2 },
+  savingsPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: SUCCESS_SOFT,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  savingsText: { fontSize: 12, fontWeight: '700', color: SUCCESS },
+
+  scanMoreLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: TEAL_SOFT,
+    borderRadius: 12,
+    paddingVertical: 11,
+  },
+  scanMoreText: { fontSize: 13, fontWeight: '700', color: TEAL },
+
+  proceedButton: {
+    backgroundColor: TEAL,
+    borderRadius: 14,
+    height: 50,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    shadowColor: TEAL_SHADOW,
+    shadowOpacity: 0.22,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  proceedButtonText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
+
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  emptyIconBadge: {
+    width: 68,
+    height: 68,
+    borderRadius: 20,
+    backgroundColor: TEAL_SOFT,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  emptyTitle: { fontSize: 17, fontWeight: '800', color: INK, marginBottom: 6 },
+  emptySubtitle: {
+    fontSize: 13,
+    color: MUTED,
+    textAlign: 'center',
+    lineHeight: 19,
+    marginBottom: 20,
+  },
+  actionButton: {
+    backgroundColor: GOLD,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 22,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  actionButtonText: { color: '#412402', fontSize: 14, fontWeight: '700' },
+
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(17, 24, 39, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 340,
+    backgroundColor: CARD_BG,
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+  },
+  modalIconBox: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: DANGER_SOFT,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  modalTitle: { fontSize: 16, fontWeight: '800', color: INK, marginBottom: 6 },
+  modalText: {
+    fontSize: 13,
+    color: MUTED,
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 20,
+  },
+  modalButtonRow: { flexDirection: 'row', gap: 10, width: '100%' },
+  modalSecondaryBtn: {
+    flex: 1,
+    backgroundColor: BG,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  modalSecondaryText: { fontSize: 13, fontWeight: '600', color: BODY },
+  modalDangerBtn: {
+    flex: 1,
+    backgroundColor: DANGER,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  modalDangerText: { fontSize: 13, fontWeight: '700', color: '#FFFFFF' },
 });

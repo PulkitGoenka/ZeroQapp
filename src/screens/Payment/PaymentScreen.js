@@ -1,168 +1,167 @@
 import React, { useState } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet,
-  Alert, ActivityIndicator, StatusBar,
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  ActivityIndicator,
+  StatusBar,
 } from 'react-native';
 import { Feather as Icon } from '@expo/vector-icons';
 import { useAuth } from '../../store/AuthContext';
 import { initiateCashPayment } from '../../services/api';
 
-// FLOW FIX
-// ─────────────────────────────────────────────────────────
-// ONLINE  → does NOT generate a QR here anymore.
-//           It goes to OnlineCheckoutScreen (bill + gateway picker).
-//           The exit QR is only generated AFTER the gateway payment
-//           succeeds, because the online QR must already mean "PAID".
-//
-// CASH    → generates the counter QR immediately, right here,
-//           BEFORE any payment happens. Nothing is paid yet.
-//           PaymentQrScreen (cash mode) keeps the back button live
-//           so the user can go back, keep scanning/adding items,
-//           and come back — the counter will re-fetch the latest
-//           cart when they scan the QR, so it's never stale.
-// ─────────────────────────────────────────────────────────
+const TEAL = '#4E989E';
+const TEAL_SOFT = '#EAF5F5';
+const BG = '#F5FAFA';
+const INK = '#111827';
+const BODY = '#374151';
+const MUTED = '#6B7280';
+const BORDER = '#E5E7EB';
+const CARD_BG = '#FFFFFF';
 
 export default function PaymentScreen({ navigation }) {
   const { session } = useAuth();
-  const [loading, setLoading] = useState(null);
+  const [loadingCash, setLoadingCash] = useState(false);
 
-  const handleOnline = () => {
-    // No API call yet — just go see the bill and pick a gateway.
-    navigation.navigate('OnlineCheckout');
-  };
-
-  const handleCash = async () => {
-    setLoading('cash');
+  const handleCashSelect = async () => {
+    setLoadingCash(true);
     try {
-      // Generate counter QR right away — this is an UNPAID QR.
       const res = await initiateCashPayment();
       navigation.navigate('PaymentQr', {
-        mode:          'cash',
-        orderId:       res.data.orderId,
+        mode: 'cash',
+        orderId: res.data.orderId,
         qrImageBase64: res.data.qrImageBase64,
-        qrToken:       res.data.qrToken,
-        totalAmount:   res.data.totalAmount,
-        expirySeconds: res.data.qrExpirySeconds,
-        paid:          false,      // <-- explicit: not paid yet
-        allowBack:     true,       // <-- explicit: user can still edit cart
+        totalAmount: res.data.totalAmount,
       });
     } catch (e) {
-      Alert.alert('Error', e.message);
+      console.log(e.message);
     } finally {
-      setLoading(null);
+      setLoadingCash(false);
     }
   };
 
   return (
       <View style={styles.flex}>
-        <StatusBar barStyle="dark-content" backgroundColor="#fff" />
+        <StatusBar barStyle="dark-content" backgroundColor={CARD_BG} />
 
+        {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-            <Icon name="arrow-left" size={20} color="#374151" />
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} activeOpacity={0.7}>
+            <Icon name="arrow-left" size={20} color={INK} />
           </TouchableOpacity>
           <View style={styles.headerCenter}>
-            <Text style={styles.headerTitle}>Choose Payment</Text>
-            <Text style={styles.headerSub}>{session?.storeName}</Text>
+            <Text style={styles.headerTitle}>Select Payment Type</Text>
+            <Text style={styles.headerSub}>{session?.storeName || 'Checkout'}</Text>
           </View>
-          <View style={{ width: 36 }} />
+          <View style={{ width: 38 }} />
         </View>
 
-        <View style={styles.body}>
+        <View style={styles.container}>
+          <Text style={styles.promptTitle}>How would you like to pay?</Text>
+          <Text style={styles.promptSub}>
+            Pay digitally via UPI to exit immediately, or visit the cashier counter.
+          </Text>
 
-          {/* Online */}
+          {/* Option A: Online */}
           <TouchableOpacity
-              style={[styles.card, styles.onlineCard]}
-              onPress={handleOnline}
-              disabled={!!loading}
+              style={styles.card}
+              onPress={() => navigation.navigate('OnlineCheckout')}
               activeOpacity={0.85}
           >
-            <View style={[styles.iconBox, { backgroundColor: '#DBEAFE' }]}>
-              <Icon name="smartphone" size={32} color="#2563EB" />
+            <View style={[styles.iconBox, { backgroundColor: TEAL_SOFT }]}>
+              <Icon name="smartphone" size={22} color={TEAL} />
             </View>
-            <View style={styles.cardInfo}>
-              <Text style={[styles.cardTitle, { color: '#2563EB' }]}>Pay Online</Text>
-              <Text style={styles.cardSub}>UPI / PhonePe / GPay / Paytm</Text>
-              <View style={styles.stepList}>
-                <Text style={styles.step}>1. Review your bill</Text>
-                <Text style={styles.step}>2. Choose a payment app & pay</Text>
-                <Text style={styles.step}>3. Exit QR generated (already paid)</Text>
-                <Text style={styles.step}>4. Show QR to security at gate</Text>
+            <View style={styles.cardBody}>
+              <View style={styles.badgeRow}>
+                <Text style={styles.cardTitle}>Pay Online</Text>
+                <View style={styles.recomPill}><Text style={styles.recomText}>FAST EXIT</Text></View>
               </View>
+              <Text style={styles.cardSub}>UPI, PhonePe, GPay, Paytm & Cards</Text>
+              <Text style={styles.bullet}>• Pay on your phone without waiting</Text>
+              <Text style={styles.bullet}>• Instant exit verification pass</Text>
             </View>
-            <Icon name="chevron-right" size={20} color="#2563EB" />
+            <Icon name="chevron-right" size={18} color={TEAL} />
           </TouchableOpacity>
 
-          <View style={styles.orRow}>
-            <View style={styles.orLine} />
-            <Text style={styles.orText}>OR</Text>
-            <View style={styles.orLine} />
-          </View>
-
-          {/* Cash */}
+          {/* Option B: Counter */}
           <TouchableOpacity
-              style={[styles.card, styles.cashCard]}
-              onPress={handleCash}
-              disabled={!!loading}
+              style={styles.card}
+              onPress={handleCashSelect}
+              disabled={loadingCash}
               activeOpacity={0.85}
           >
-            <View style={[styles.iconBox, { backgroundColor: '#D1FAE5' }]}>
-              <Icon name="credit-card" size={32} color="#059669" />
+            <View style={[styles.iconBox, { backgroundColor: '#FEF3C7' }]}>
+              <Icon name="credit-card" size={22} color="#D97706" />
             </View>
-            <View style={styles.cardInfo}>
-              <Text style={[styles.cardTitle, { color: '#059669' }]}>Pay at Counter</Text>
-              <Text style={styles.cardSub}>Cash / Card at billing counter</Text>
-              <View style={styles.stepList}>
-                <Text style={styles.step}>1. Counter QR generated now (unpaid)</Text>
-                <Text style={styles.step}>2. You can still go back &amp; add items</Text>
-                <Text style={styles.step}>3. Show QR to counter staff</Text>
-                <Text style={styles.step}>4. Staff scans → fetches latest cart</Text>
-                <Text style={styles.step}>5. Pay cash/card → get paper bill</Text>
-              </View>
+            <View style={styles.cardBody}>
+              <Text style={styles.cardTitle}>Pay at Counter</Text>
+              <Text style={styles.cardSub}>Cash or card machine with cashier</Text>
+              <Text style={styles.bullet}>• Generates counter check-in QR</Text>
+              <Text style={styles.bullet}>• Collect paper invoice from counter</Text>
             </View>
-            {loading === 'cash'
-                ? <ActivityIndicator color="#059669" />
-                : <Icon name="chevron-right" size={20} color="#059669" />
-            }
+            {loadingCash ? (
+                <ActivityIndicator size="small" color="#D97706" />
+            ) : (
+                <Icon name="chevron-right" size={18} color="#D97706" />
+            )}
           </TouchableOpacity>
-
         </View>
       </View>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: '#F9FAFB' },
+  flex: { flex: 1, backgroundColor: BG },
   header: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    paddingHorizontal: 16, paddingTop: 52, paddingBottom: 14,
-    backgroundColor: '#fff', borderBottomWidth: 0.5, borderBottomColor: '#E5E7EB',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 54,
+    paddingBottom: 14,
+    backgroundColor: CARD_BG,
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER,
   },
-  backBtn: { width: 36, height: 36, justifyContent: 'center', alignItems: 'center' },
-  headerCenter: { flex: 1 },
-  headerTitle: { fontSize: 17, fontWeight: '700', color: '#111827' },
-  headerSub: { fontSize: 12, color: '#6B7280', marginTop: 1 },
-  body: { flex: 1, padding: 20, gap: 16, justifyContent: 'center' },
+  backBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: BG,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  headerCenter: { alignItems: 'center' },
+  headerTitle: { fontSize: 16, fontWeight: '800', color: INK },
+  headerSub: { fontSize: 12, color: MUTED, marginTop: 1 },
+
+  container: { padding: 20, gap: 14, flex: 1, justifyContent: 'center' },
+  promptTitle: { fontSize: 18, fontWeight: '800', color: INK },
+  promptSub: { fontSize: 13, color: MUTED, lineHeight: 18, marginBottom: 8 },
 
   card: {
-    borderRadius: 18, padding: 18,
-    flexDirection: 'row', alignItems: 'flex-start', gap: 14,
-    borderWidth: 1.5,
+    backgroundColor: CARD_BG,
+    borderRadius: 16,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 14,
+    borderWidth: 1,
+    borderColor: BORDER,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
   },
-  onlineCard: { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' },
-  cashCard:   { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' },
-
-  iconBox: {
-    width: 60, height: 60, borderRadius: 14,
-    justifyContent: 'center', alignItems: 'center', flexShrink: 0,
-  },
-  cardInfo: { flex: 1 },
-  cardTitle: { fontSize: 17, fontWeight: '800', marginBottom: 2 },
-  cardSub:   { fontSize: 12, color: '#374151', fontWeight: '600', marginBottom: 10 },
-  stepList:  { gap: 3 },
-  step:      { fontSize: 12, color: '#6B7280', lineHeight: 18 },
-
-  orRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  orLine: { flex: 1, height: 1, backgroundColor: '#E5E7EB' },
-  orText: { fontSize: 12, fontWeight: '700', color: '#9CA3AF' },
+  iconBox: { width: 44, height: 44, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  cardBody: { flex: 1 },
+  badgeRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 2 },
+  cardTitle: { fontSize: 15, fontWeight: '700', color: INK },
+  recomPill: { backgroundColor: '#ECFDF5', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+  recomText: { fontSize: 9, fontWeight: '800', color: '#059669' },
+  cardSub: { fontSize: 12, color: MUTED, marginBottom: 6 },
+  bullet: { fontSize: 11, color: BODY, lineHeight: 16 },
 });

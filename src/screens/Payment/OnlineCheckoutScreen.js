@@ -1,216 +1,531 @@
 import React, { useEffect, useState } from 'react';
 import {
-    View, Text, TouchableOpacity, StyleSheet, FlatList,
-    ActivityIndicator, StatusBar, Alert,
+    View,
+    Text,
+    TouchableOpacity,
+    StyleSheet,
+    ScrollView,
+    ActivityIndicator,
+    StatusBar,
+    Modal,
 } from 'react-native';
 import { Feather as Icon } from '@expo/vector-icons';
 import { useAuth } from '../../store/AuthContext';
 import { getCart, initiateOnlinePayment } from '../../services/api';
 
-// New screen inserted BEFORE the exit QR is created for the online flow.
-// Shows the bill (what CartScreen already had) and lets the user pick a
-// gateway. Only after the gateway call reports success do we ask the
-// backend for the exit QR — so the QR that gets generated always means
-// "this order is already paid".
-
-const GATEWAYS = [
-    { id: 'UPI',     label: 'UPI (Any App)', icon: 'smartphone', color: '#7C3AED' },
-    { id: 'PHONEPE', label: 'PhonePe',       icon: 'smartphone', color: '#5F259F' },
-    { id: 'GPAY',     label: 'Google Pay',    icon: 'smartphone', color: '#4285F4' },
-    { id: 'PAYTM',    label: 'Paytm',         icon: 'smartphone', color: '#00BAF2' },
-];
+const TEAL = '#4E989E';
+const TEAL_SOFT = '#EAF5F5';
+const TEAL_SHADOW = '#36696D';
+const GOLD = '#F7B32B';
+const BG = '#F5FAFA';
+const INK = '#111827';
+const BODY = '#374151';
+const MUTED = '#6B7280';
+const BORDER = '#E5E7EB';
+const CARD_BG = '#FFFFFF';
+const SUCCESS = '#059669';
+const DANGER = '#DC2626';
 
 export default function OnlineCheckoutScreen({ navigation }) {
-    const { session } = useAuth();
+    const { session, clearSession } = useAuth();
     const [bill, setBill] = useState(null);
-    const [loadingBill, setLoadingBill] = useState(true);
-    const [selectedGateway, setSelectedGateway] = useState(null);
-    const [paying, setPaying] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [selectedMethod, setSelectedMethod] = useState('UPI_APP');
+    const [processing, setProcessing] = useState(false);
+    const [billModalVisible, setBillModalVisible] = useState(false);
+    const [resultModal, setResultModal] = useState({ visible: false, success: false });
 
     useEffect(() => {
         (async () => {
             try {
                 const res = await getCart();
-                const cart = res.data;
-
-                // Confirmed shape (matches CartScreen.js):
-                // cart.items[i]: { barcode, productName, discountPrice, mrp, quantity }
-                // cart: { totalAmount, totalDiscount }
-                setBill(cart);
+                setBill(res.data);
             } catch (e) {
-                console.log('getCart failed:', e?.message);
-                Alert.alert('Error', 'Could not load your bill.');
                 navigation.goBack();
             } finally {
-                setLoadingBill(false);
+                setLoading(false);
             }
         })();
-    }, []);
+    }, [navigation]);
 
     const handlePay = async () => {
-        if (!selectedGateway) {
-            Alert.alert('Select a payment app', 'Choose UPI, PhonePe, GPay or Paytm to continue.');
-            return;
-        }
-        setPaying(true);
+        setProcessing(true);
         try {
-            // Backend: charges via chosen gateway, and ONLY on success
-            // generates & returns the exit QR (order already marked PAID).
-            const res = await initiateOnlinePayment(selectedGateway);
-            navigation.navigate('PaymentQr', {
-                mode:          'online',
-                orderId:       res.data.orderId,
-                qrImageBase64: res.data.qrImageBase64,
-                qrToken:       res.data.qrToken,
-                totalAmount:   res.data.totalAmount,
-                expirySeconds: res.data.qrExpirySeconds,
-                paid:          true,       // <-- already paid, this is an exit-only QR
-                allowBack:     false,      // <-- locked: nothing left to change
-            });
+            await initiateOnlinePayment(selectedMethod);
+            setResultModal({ visible: true, success: true });
         } catch (e) {
-            Alert.alert('Payment Failed', e.message || 'Please try again.');
+            setResultModal({ visible: true, success: false });
         } finally {
-            setPaying(false);
+            setProcessing(false);
         }
     };
 
-    if (loadingBill) {
+    const handleFinish = async () => {
+        setResultModal({ visible: false, success: false });
+        await clearSession();
+        navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
+    };
+
+    if (loading) {
         return (
-            <View style={styles.loadingWrap}>
-                <ActivityIndicator size="large" color="#2563EB" />
+            <View style={[styles.flex, styles.center]}>
+                <ActivityIndicator size="large" color={TEAL} />
             </View>
         );
     }
 
+    const items = bill?.items || [];
+    const totalAmount = bill?.totalAmount || 0;
+    const totalDiscount = bill?.totalDiscount || 0;
+
     return (
         <View style={styles.flex}>
-            <StatusBar barStyle="dark-content" backgroundColor="#fff" />
+            <StatusBar barStyle="dark-content" backgroundColor={CARD_BG} />
 
+            {/* Header */}
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-                    <Icon name="arrow-left" size={20} color="#374151" />
+                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} activeOpacity={0.7}>
+                    <Icon name="arrow-left" size={20} color={INK} />
                 </TouchableOpacity>
-                <View style={styles.headerCenter}>
-                    <Text style={styles.headerTitle}>Review & Pay</Text>
-                    <Text style={styles.headerSub}>{session?.storeName}</Text>
+                <View style={styles.headerTextWrap}>
+                    <Text style={styles.headerTitle}>Payment Options</Text>
+                    <Text style={styles.headerSub} numberOfLines={1}>
+                        Store: {session?.storeName || 'Supermarket'}
+                    </Text>
                 </View>
-                <View style={{ width: 36 }} />
             </View>
 
-            <FlatList
-                style={styles.body}
-                data={bill?.items || []}
-                keyExtractor={(item) => item.barcode}
-                ListHeaderComponent={
-                    <Text style={styles.sectionTitle}>Your Bill ({(bill?.items || []).length} items)</Text>
-                }
-                renderItem={({ item }) => (
-                    <View style={styles.itemRow}>
-                        <Text style={styles.itemName} numberOfLines={1}>{item.productName}</Text>
-                        <Text style={styles.itemQty}>x{item.quantity}</Text>
-                        <Text style={styles.itemPrice}>₹{item.discountPrice * item.quantity}</Text>
-                    </View>
-                )}
-                ListFooterComponent={
-                    <>
-                        <View style={styles.totalRow}>
-                            <Text style={styles.totalLabel}>Total</Text>
-                            <Text style={styles.totalValue}>₹{bill?.totalAmount || 0}</Text>
-                        </View>
-                        {bill?.totalDiscount > 0 && (
-                            <Text style={styles.saveText}>You saved ₹{bill.totalDiscount}</Text>
-                        )}
-
-                        <Text style={styles.sectionTitle}>Choose Payment App</Text>
-                        <View style={styles.gatewayGrid}>
-                            {GATEWAYS.map((g) => (
-                                <TouchableOpacity
-                                    key={g.id}
-                                    style={[
-                                        styles.gatewayCard,
-                                        selectedGateway === g.id && styles.gatewayCardActive,
-                                    ]}
-                                    onPress={() => setSelectedGateway(g.id)}
-                                    activeOpacity={0.85}
-                                >
-                                    <Icon name={g.icon} size={22} color={g.color} />
-                                    <Text style={styles.gatewayLabel}>{g.label}</Text>
-                                    {selectedGateway === g.id && (
-                                        <Icon name="check-circle" size={16} color="#2563EB" style={styles.gatewayCheck} />
-                                    )}
-                                </TouchableOpacity>
-                            ))}
-                        </View>
-                    </>
-                }
-            />
-
-            <View style={styles.footer}>
+            {/* Top Banner (Zepto Style Floating Total) */}
+            <View style={styles.topBanner}>
+                <View>
+                    <Text style={styles.topPayLabel}>To Pay: <Text style={styles.topPayAmount}>₹{totalAmount}</Text></Text>
+                    {totalDiscount > 0 && (
+                        <Text style={styles.topSavingsText}>Saved ₹{totalDiscount} on this bill</Text>
+                    )}
+                </View>
                 <TouchableOpacity
-                    style={[styles.payBtn, (!selectedGateway || paying) && styles.payBtnDisabled]}
-                    onPress={handlePay}
-                    disabled={!selectedGateway || paying}
+                    style={styles.viewBillBtn}
+                    onPress={() => setBillModalVisible(true)}
+                    activeOpacity={0.7}
                 >
-                    {paying
-                        ? <ActivityIndicator color="#fff" />
-                        : <Text style={styles.payBtnText}>Pay ₹{bill?.totalAmount || 0}</Text>
-                    }
+                    <Text style={styles.viewBillText}>View Bill</Text>
+                    <Icon name="chevron-right" size={14} color={TEAL} />
                 </TouchableOpacity>
             </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+                {/* Section 1: UPI Options */}
+                <Text style={styles.sectionHeader}>Pay by UPI</Text>
+                <View style={styles.cardGroup}>
+                    <TouchableOpacity
+                        style={[styles.rowOption, selectedMethod === 'UPI_APP' && styles.rowOptionActive]}
+                        onPress={() => setSelectedMethod('UPI_APP')}
+                        activeOpacity={0.8}
+                    >
+                        <View style={[styles.iconBox, { backgroundColor: '#EDE9FE' }]}>
+                            <Icon name="smartphone" size={18} color="#7C3AED" />
+                        </View>
+                        <View style={styles.rowInfo}>
+                            <Text style={styles.rowTitle}>Pay by any UPI app</Text>
+                            <Text style={styles.rowSub}>GPay, PhonePe, Paytm, CRED & more</Text>
+                        </View>
+                        <View style={[styles.radioCircle, selectedMethod === 'UPI_APP' && styles.radioActive]}>
+                            {selectedMethod === 'UPI_APP' && <View style={styles.radioDot} />}
+                        </View>
+                    </TouchableOpacity>
+
+                    <View style={styles.divider} />
+
+                    <TouchableOpacity
+                        style={[styles.rowOption, selectedMethod === 'UPI_QR' && styles.rowOptionActive]}
+                        onPress={() => setSelectedMethod('UPI_QR')}
+                        activeOpacity={0.8}
+                    >
+                        <View style={[styles.iconBox, { backgroundColor: TEAL_SOFT }]}>
+                            <Icon name="maximize" size={18} color={TEAL} />
+                        </View>
+                        <View style={styles.rowInfo}>
+                            <Text style={styles.rowTitle}>Pay via Dynamic QR Code</Text>
+                            <Text style={styles.rowSub}>Scan & pay from secondary device</Text>
+                        </View>
+                        <View style={[styles.radioCircle, selectedMethod === 'UPI_QR' && styles.radioActive]}>
+                            {selectedMethod === 'UPI_QR' && <View style={styles.radioDot} />}
+                        </View>
+                    </TouchableOpacity>
+                </View>
+
+                {/* Section 2: Cards */}
+                <Text style={styles.sectionHeader}>Credit & Debit Cards</Text>
+                <View style={styles.cardGroup}>
+                    <TouchableOpacity
+                        style={[styles.rowOption, selectedMethod === 'CARD' && styles.rowOptionActive]}
+                        onPress={() => setSelectedMethod('CARD')}
+                        activeOpacity={0.8}
+                    >
+                        <View style={[styles.iconBox, { backgroundColor: '#FEF3C7' }]}>
+                            <Icon name="credit-card" size={18} color="#D97706" />
+                        </View>
+                        <View style={styles.rowInfo}>
+                            <Text style={styles.rowTitle}>Credit / Debit Card</Text>
+                            <Text style={styles.rowSub}>Visa, Mastercard, Rupay & Diners</Text>
+                        </View>
+                        <View style={[styles.radioCircle, selectedMethod === 'CARD' && styles.radioActive]}>
+                            {selectedMethod === 'CARD' && <View style={styles.radioDot} />}
+                        </View>
+                    </TouchableOpacity>
+                </View>
+
+                {/* Section 3: Netbanking */}
+                <Text style={styles.sectionHeader}>Netbanking</Text>
+                <View style={styles.cardGroup}>
+                    <View style={styles.bankGrid}>
+                        {[
+                            { id: 'HDFC', name: 'HDFC Bank', icon: 'shield' },
+                            { id: 'ICICI', name: 'ICICI Bank', icon: 'globe' },
+                            { id: 'SBI', name: 'State Bank', icon: 'layers' },
+                            { id: 'AXIS', name: 'Axis Bank', icon: 'compass' },
+                        ].map((bank) => (
+                            <TouchableOpacity
+                                key={bank.id}
+                                style={[styles.bankItem, selectedMethod === bank.id && styles.bankItemActive]}
+                                onPress={() => setSelectedMethod(bank.id)}
+                                activeOpacity={0.8}
+                            >
+                                <View style={styles.bankIconCircle}>
+                                    <Icon name={bank.icon} size={16} color={selectedMethod === bank.id ? TEAL : MUTED} />
+                                </View>
+                                <Text style={[styles.bankName, selectedMethod === bank.id && styles.bankNameActive]}>
+                                    {bank.name}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                </View>
+            </ScrollView>
+
+            {/* Bottom Sticky Payment CTA */}
+            <View style={styles.footer}>
+                <View style={styles.footerMeta}>
+                    <Text style={styles.footerMetaLabel}>Amount to pay</Text>
+                    <Text style={styles.footerMetaAmount}>₹{totalAmount}</Text>
+                </View>
+                <TouchableOpacity
+                    style={[styles.paySubmitBtn, processing && styles.payBtnDisabled]}
+                    onPress={handlePay}
+                    disabled={processing}
+                    activeOpacity={0.85}
+                >
+                    {processing ? (
+                        <ActivityIndicator color="#412402" />
+                    ) : (
+                        <>
+                            <Icon name="lock" size={16} color="#412402" />
+                            <Text style={styles.paySubmitText}>Proceed to Pay</Text>
+                        </>
+                    )}
+                </TouchableOpacity>
+            </View>
+
+            {/* Slide-Up Bill Details Modal */}
+            <Modal visible={billModalVisible} transparent animationType="slide">
+                <View style={styles.modalBackdrop}>
+                    <View style={styles.billDrawer}>
+                        <View style={styles.drawerHeader}>
+                            <Text style={styles.drawerTitle}>Order Bill Details</Text>
+                            <TouchableOpacity onPress={() => setBillModalVisible(false)}>
+                                <Icon name="x" size={20} color={INK} />
+                            </TouchableOpacity>
+                        </View>
+
+                        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.drawerScroll}>
+                            {items.map((item, idx) => (
+                                <View key={idx} style={styles.billItemRow}>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={styles.billItemName}>{item.productName}</Text>
+                                        <Text style={styles.billItemQty}>Qty: {item.quantity} × ₹{item.discountPrice}</Text>
+                                    </View>
+                                    <Text style={styles.billItemPrice}>₹{item.discountPrice * item.quantity}</Text>
+                                </View>
+                            ))}
+
+                            <View style={styles.billDivider} />
+                            <View style={styles.billCalcRow}>
+                                <Text style={styles.calcLabel}>Item Total</Text>
+                                <Text style={styles.calcVal}>₹{totalAmount + totalDiscount}</Text>
+                            </View>
+                            {totalDiscount > 0 && (
+                                <View style={styles.billCalcRow}>
+                                    <Text style={[styles.calcLabel, { color: SUCCESS }]}>Savings & Discounts</Text>
+                                    <Text style={[styles.calcVal, { color: SUCCESS }]}>- ₹{totalDiscount}</Text>
+                                </View>
+                            )}
+                            <View style={[styles.billCalcRow, styles.grandRow]}>
+                                <Text style={styles.grandLabel}>To Pay</Text>
+                                <Text style={styles.grandVal}>₹{totalAmount}</Text>
+                            </View>
+                        </ScrollView>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Success / Failure Result Dialog */}
+            <Modal visible={resultModal.visible} transparent animationType="fade">
+                <View style={styles.modalBackdropCenter}>
+                    <View style={styles.resultCard}>
+                        <View style={[styles.resultCircle, resultModal.success ? styles.bgSuccess : styles.bgDanger]}>
+                            <Icon name={resultModal.success ? 'check' : 'alert-circle'} size={32} color="#FFFFFF" />
+                        </View>
+                        <Text style={styles.resultTitle}>
+                            {resultModal.success ? 'Payment Successful' : 'Payment Failed'}
+                        </Text>
+                        <Text style={styles.resultSub}>
+                            {resultModal.success
+                                ? 'Your transaction was approved and your store session has ended.'
+                                : 'Unable to process transaction. Please try another method.'}
+                        </Text>
+
+                        {resultModal.success ? (
+                            <TouchableOpacity style={styles.resultBtnSuccess} onPress={handleFinish} activeOpacity={0.85}>
+                                <Icon name="home" size={16} color="#412402" />
+                                <Text style={styles.resultBtnSuccessText}>Go to Home</Text>
+                            </TouchableOpacity>
+                        ) : (
+                            <TouchableOpacity
+                                style={styles.resultBtnRetry}
+                                onPress={() => setResultModal({ visible: false, success: false })}
+                                activeOpacity={0.85}
+                            >
+                                <Text style={styles.resultBtnRetryText}>Try Again</Text>
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 }
 
 const styles = StyleSheet.create({
-    flex: { flex: 1, backgroundColor: '#F9FAFB' },
-    loadingWrap: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F9FAFB' },
+    flex: { flex: 1, backgroundColor: BG },
+    center: { justifyContent: 'center', alignItems: 'center' },
 
     header: {
-        flexDirection: 'row', alignItems: 'center', gap: 10,
-        paddingHorizontal: 16, paddingTop: 52, paddingBottom: 14,
-        backgroundColor: '#fff', borderBottomWidth: 0.5, borderBottomColor: '#E5E7EB',
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 20,
+        paddingTop: 54,
+        paddingBottom: 14,
+        backgroundColor: CARD_BG,
+        borderBottomWidth: 1,
+        borderBottomColor: BORDER,
     },
-    backBtn: { width: 36, height: 36, justifyContent: 'center', alignItems: 'center' },
-    headerCenter: { flex: 1 },
-    headerTitle: { fontSize: 17, fontWeight: '700', color: '#111827' },
-    headerSub: { fontSize: 12, color: '#6B7280', marginTop: 1 },
-
-    body: { flex: 1, paddingHorizontal: 20 },
-    sectionTitle: { fontSize: 13, fontWeight: '700', color: '#111827', marginTop: 18, marginBottom: 10 },
-
-    itemRow: {
-        flexDirection: 'row', alignItems: 'center', gap: 10,
-        paddingVertical: 8, borderBottomWidth: 0.5, borderBottomColor: '#E5E7EB',
+    backBtn: {
+        width: 36,
+        height: 36,
+        borderRadius: 10,
+        backgroundColor: BG,
+        justifyContent: 'center',
+        alignItems: 'center',
     },
-    itemName: { flex: 1, fontSize: 13, color: '#374151' },
-    itemQty: { fontSize: 12, color: '#9CA3AF' },
-    itemPrice: { fontSize: 13, fontWeight: '700', color: '#111827', width: 70, textAlign: 'right' },
+    headerTextWrap: { flex: 1, marginLeft: 12 },
+    headerTitle: { fontSize: 17, fontWeight: '800', color: INK },
+    headerSub: { fontSize: 12, color: MUTED, marginTop: 1 },
 
-    totalRow: {
-        flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-        paddingVertical: 14, marginTop: 4, borderTopWidth: 1, borderTopColor: '#111827',
+    topBanner: {
+        backgroundColor: CARD_BG,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 20,
+        paddingVertical: 14,
+        borderBottomWidth: 1,
+        borderBottomColor: BORDER,
     },
-    totalLabel: { fontSize: 15, fontWeight: '700', color: '#111827' },
-    totalValue: { fontSize: 22, fontWeight: '800', color: '#111827' },
-    saveText: { fontSize: 12, fontWeight: '700', color: '#059669', marginTop: 4 },
+    topPayLabel: { fontSize: 13, color: MUTED, fontWeight: '500' },
+    topPayAmount: { fontSize: 18, fontWeight: '800', color: INK },
+    topSavingsText: { fontSize: 11, fontWeight: '700', color: SUCCESS, marginTop: 2 },
+    viewBillBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: TEAL_SOFT,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 8,
+    },
+    viewBillText: { fontSize: 12, fontWeight: '700', color: TEAL },
 
-    gatewayGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, paddingBottom: 20 },
-    gatewayCard: {
-        width: '47%', borderRadius: 14, padding: 14, gap: 8,
-        backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#E5E7EB',
+    scroll: { padding: 20, paddingBottom: 100 },
+    sectionHeader: {
+        fontSize: 12,
+        fontWeight: '800',
+        color: MUTED,
+        letterSpacing: 0.6,
+        textTransform: 'uppercase',
+        marginBottom: 10,
+        marginTop: 10,
     },
-    gatewayCardActive: { borderColor: '#2563EB', backgroundColor: '#EFF6FF' },
-    gatewayLabel: { fontSize: 13, fontWeight: '700', color: '#111827' },
-    gatewayCheck: { position: 'absolute', top: 10, right: 10 },
+    cardGroup: {
+        backgroundColor: CARD_BG,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: BORDER,
+        overflow: 'hidden',
+        marginBottom: 16,
+    },
+    rowOption: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 14,
+        gap: 12,
+    },
+    rowOptionActive: { backgroundColor: TEAL_SOFT },
+    iconBox: {
+        width: 38,
+        height: 38,
+        borderRadius: 10,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    rowInfo: { flex: 1 },
+    rowTitle: { fontSize: 14, fontWeight: '700', color: INK },
+    rowSub: { fontSize: 11, color: MUTED, marginTop: 2 },
+    divider: { height: 1, backgroundColor: '#F3F4F6' },
+    radioCircle: {
+        width: 20,
+        height: 20,
+        borderRadius: 10,
+        borderWidth: 2,
+        borderColor: BORDER,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    radioActive: { borderColor: TEAL },
+    radioDot: {
+        width: 10,
+        height: 10,
+        borderRadius: 5,
+        backgroundColor: TEAL,
+    },
+
+    bankGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        padding: 10,
+        gap: 8,
+    },
+    bankItem: {
+        width: '48.5%',
+        backgroundColor: BG,
+        borderRadius: 12,
+        padding: 10,
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: BORDER,
+        gap: 6,
+    },
+    bankItemActive: {
+        borderColor: TEAL,
+        backgroundColor: TEAL_SOFT,
+    },
+    bankIconCircle: {
+        width: 30,
+        height: 30,
+        borderRadius: 15,
+        backgroundColor: CARD_BG,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    bankName: { fontSize: 11, fontWeight: '700', color: BODY },
+    bankNameActive: { color: TEAL },
 
     footer: {
-        padding: 20, backgroundColor: '#fff',
-        borderTopWidth: 0.5, borderTopColor: '#E5E7EB',
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: CARD_BG,
+        borderTopWidth: 1,
+        borderTopColor: BORDER,
+        paddingHorizontal: 20,
+        paddingVertical: 14,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 16,
     },
-    payBtn: {
-        backgroundColor: '#2563EB', borderRadius: 14, paddingVertical: 16,
-        alignItems: 'center', justifyContent: 'center',
+    footerMeta: { flex: 1 },
+    footerMetaLabel: { fontSize: 11, color: MUTED },
+    footerMetaAmount: { fontSize: 20, fontWeight: '800', color: INK },
+    paySubmitBtn: {
+        backgroundColor: GOLD,
+        paddingHorizontal: 24,
+        paddingVertical: 14,
+        borderRadius: 14,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        shadowColor: '#000',
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 2,
     },
-    payBtnDisabled: { backgroundColor: '#93C5FD' },
-    payBtnText: { color: '#fff', fontSize: 16, fontWeight: '800' },
+    payBtnDisabled: { opacity: 0.6 },
+    paySubmitText: { color: '#412402', fontSize: 14, fontWeight: '800' },
+
+    // Drawer
+    modalBackdrop: { flex: 1, backgroundColor: 'rgba(17, 24, 39, 0.65)', justifyContent: 'flex-end' },
+    billDrawer: {
+        backgroundColor: CARD_BG,
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        maxHeight: '75%',
+        padding: 20,
+    },
+    drawerHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingBottom: 14,
+        borderBottomWidth: 1,
+        borderBottomColor: BORDER,
+    },
+    drawerTitle: { fontSize: 16, fontWeight: '800', color: INK },
+    drawerScroll: { paddingVertical: 14, gap: 10 },
+    billItemRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    billItemName: { fontSize: 13, fontWeight: '700', color: INK },
+    billItemQty: { fontSize: 11, color: MUTED, marginTop: 1 },
+    billItemPrice: { fontSize: 13, fontWeight: '800', color: INK },
+    billDivider: { height: 1, backgroundColor: BORDER, marginVertical: 8 },
+    billCalcRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    calcLabel: { fontSize: 12, color: MUTED },
+    calcVal: { fontSize: 13, fontWeight: '700', color: INK },
+    grandRow: { paddingTop: 6, borderTopWidth: 1, borderTopColor: BORDER },
+    grandLabel: { fontSize: 14, fontWeight: '800', color: INK },
+    grandVal: { fontSize: 16, fontWeight: '800', color: INK },
+
+    // Result Center Modal
+    modalBackdropCenter: { flex: 1, backgroundColor: 'rgba(17, 24, 39, 0.7)', justifyContent: 'center', alignItems: 'center', padding: 24 },
+    resultCard: { width: '100%', maxWidth: 330, backgroundColor: CARD_BG, borderRadius: 20, padding: 24, alignItems: 'center' },
+    resultCircle: { width: 56, height: 56, borderRadius: 28, justifyContent: 'center', alignItems: 'center', marginBottom: 14 },
+    bgSuccess: { backgroundColor: SUCCESS },
+    bgDanger: { backgroundColor: DANGER },
+    resultTitle: { fontSize: 18, fontWeight: '800', color: INK, marginBottom: 6 },
+    resultSub: { fontSize: 13, color: MUTED, textAlign: 'center', lineHeight: 18, marginBottom: 20 },
+    resultBtnSuccess: {
+        backgroundColor: GOLD,
+        paddingHorizontal: 22,
+        paddingVertical: 13,
+        borderRadius: 12,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    resultBtnSuccessText: { color: '#412402', fontSize: 14, fontWeight: '800' },
+    resultBtnRetry: {
+        backgroundColor: BG,
+        paddingHorizontal: 22,
+        paddingVertical: 12,
+        borderRadius: 12,
+    },
+    resultBtnRetryText: { color: BODY, fontSize: 13, fontWeight: '700' },
 });

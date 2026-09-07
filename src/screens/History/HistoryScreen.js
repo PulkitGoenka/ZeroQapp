@@ -1,45 +1,40 @@
-// ─────────────────────────────────────────────────────────────
-//  HistoryScreen.js  –  Payment history list
-// ─────────────────────────────────────────────────────────────
 import React, { useEffect, useState, useCallback } from 'react';
 import {
-  View, Text, FlatList, StyleSheet, ActivityIndicator,
-  Alert, TouchableOpacity, RefreshControl,
+  View,
+  Text,
+  FlatList,
+  StyleSheet,
+  ActivityIndicator,
+  TouchableOpacity,
+  RefreshControl,
+  StatusBar,
 } from 'react-native';
 import { Feather as Icon } from '@expo/vector-icons';
 import { getPaymentHistory } from '../../services/api';
 
-const fmt = (n) => `₹${Number(n).toFixed(2)}`;
+const TEAL = '#4E989E';
+const TEAL_SOFT = '#EAF5F5';
+const BG = '#F5FAFA';
+const INK = '#111827';
+const MUTED = '#6B7280';
+const BORDER = '#E5E7EB';
+const CARD_BG = '#FFFFFF';
+const SUCCESS = '#059669';
+const SUCCESS_SOFT = '#ECFDF5';
+
+const fmt = (n) => `₹${Number(n || 0).toFixed(2)}`;
 
 const fmtDate = (iso) => {
+  if (!iso) return 'Recent';
   const d = new Date(iso);
-  return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
-    + ' · ' + d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+  return (
+      d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) +
+      ' · ' +
+      d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+  );
 };
 
-function HistoryCard({ item }) {
-  const isCash = item.paymentMethod === 'CASH';
-  return (
-    <View style={styles.card}>
-      <View style={[styles.methodBadge, isCash ? styles.cashBadge : styles.onlineBadge]}>
-        <Text style={styles.badgeText}>{isCash ? '💵 Cash' : '💳 Online'}</Text>
-      </View>
-      <View style={styles.cardBody}>
-        <View style={styles.row}>
-          <Text style={styles.storeName} numberOfLines={1}>{item.storeName}</Text>
-          <Text style={styles.amount}>{fmt(item.totalAmount)}</Text>
-        </View>
-        <Text style={styles.brandDate}>{item.brandName} · {fmtDate(item.paidAt)}</Text>
-        <View style={styles.footer}>
-          <Text style={styles.items}>{item.itemCount} items</Text>
-          <Text style={styles.billRef}>#{item.billRef}</Text>
-        </View>
-      </View>
-    </View>
-  );
-}
-
-export default function HistoryScreen({navigation}) {
+export default function HistoryScreen({ navigation }) {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -49,22 +44,24 @@ export default function HistoryScreen({navigation}) {
   const fetchHistory = useCallback(async (pg = 0, refresh = false) => {
     try {
       const res = await getPaymentHistory(pg, 20);
-      const newItems = res.data || [];
+      const newItems = res?.data || [];
       if (refresh || pg === 0) {
         setHistory(newItems);
       } else {
-        setHistory(prev => [...prev, ...newItems]);
+        setHistory((prev) => [...prev, ...newItems]);
       }
       setHasMore(newItems.length === 20);
     } catch (e) {
-      Alert.alert('Error', e.message);
+      console.log('Payment history error:', e.message);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   }, []);
 
-  useEffect(() => { fetchHistory(0); }, [fetchHistory]);
+  useEffect(() => {
+    fetchHistory(0);
+  }, [fetchHistory]);
 
   const loadMore = () => {
     if (!hasMore || loading) return;
@@ -72,98 +69,221 @@ export default function HistoryScreen({navigation}) {
     setPage(nextPage);
     fetchHistory(nextPage);
   };
-  const handleBack = () => {
-    if (navigation?.canGoBack?.()) {
-      navigation.goBack();
-    } else {
-      navigation.navigate('StoreHomeScreen');
-    }
-  };
 
   if (loading && page === 0) {
     return (
-      <View style={styles.loadingBox}>
-        <ActivityIndicator size="large" color="#2563EB" />
-      </View>
+        <View style={[styles.flex, styles.center]}>
+          <ActivityIndicator size="large" color={TEAL} />
+        </View>
     );
   }
 
   return (
       <View style={styles.flex}>
+        <StatusBar barStyle="dark-content" backgroundColor={CARD_BG} />
+
+        {/* Header */}
         <View style={styles.header}>
-          <View style={styles.headerTopRow}>
-            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-              <Icon name="arrow-left" size={18} color="#111827" />
-            </TouchableOpacity>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.headerTitle}>Purchase History</Text>
-              <Text style={styles.headerSub}>{history.length} transactions</Text>
-            </View>
+          <TouchableOpacity
+              onPress={() => navigation.goBack()}
+              style={styles.backBtn}
+              activeOpacity={0.7}
+          >
+            <Icon name="arrow-left" size={18} color={INK} />
+          </TouchableOpacity>
+          <View style={{ flex: 1, marginLeft: 12 }}>
+            <Text style={styles.headerTitle}>Order & Payment History</Text>
+            <Text style={styles.headerSub}>{history.length} purchases recorded</Text>
           </View>
         </View>
 
-      {history.length === 0 ? (
-        <View style={styles.emptyBox}>
-          <Text style={styles.emptyIcon}>🧾</Text>
-          <Text style={styles.emptyTitle}>No transactions yet</Text>
-          <Text style={styles.emptyText}>
-            Your completed purchases will appear here.
-          </Text>
-        </View>
-      ) : (
-        <FlatList
-          data={history}
-          keyExtractor={i => i.id}
-          renderItem={({ item }) => <HistoryCard item={item} />}
-          contentContainerStyle={styles.list}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={() => { setRefreshing(true); setPage(0); fetchHistory(0, true); }}
+        {history.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <View style={styles.emptyIconCircle}>
+                <Icon name="file-text" size={32} color={TEAL} />
+              </View>
+              <Text style={styles.emptyTitle}>No Transactions Yet</Text>
+              <Text style={styles.emptySubtitle}>
+                Completed in-store orders and payment invoices will appear here.
+              </Text>
+            </View>
+        ) : (
+            <FlatList
+                data={history}
+                keyExtractor={(item) => String(item.id || item.billRef)}
+                contentContainerStyle={styles.listContent}
+                refreshControl={
+                  <RefreshControl
+                      refreshing={refreshing}
+                      onRefresh={() => {
+                        setRefreshing(true);
+                        setPage(0);
+                        fetchHistory(0, true);
+                      }}
+                      colors={[TEAL]}
+                  />
+                }
+                onEndReached={loadMore}
+                onEndReachedThreshold={0.3}
+                ListFooterComponent={
+                  hasMore ? <ActivityIndicator color={TEAL} style={{ marginVertical: 14 }} /> : null
+                }
+                renderItem={({ item }) => {
+                  const isOnline = (item.paymentMethod || '').toUpperCase() !== 'CASH';
+                  return (
+                      <TouchableOpacity
+                          style={styles.billCard}
+                          onPress={() => navigation.navigate('Receipt', { bill: item })}
+                          activeOpacity={0.85}
+                      >
+                        <View style={styles.billCardHeader}>
+                          <View style={styles.billMetaRow}>
+                            <View style={[styles.methodBadge, isOnline ? styles.badgeOnline : styles.badgeCash]}>
+                              <Icon
+                                  name={isOnline ? 'credit-card' : 'dollar-sign'}
+                                  size={12}
+                                  color={isOnline ? '#2563EB' : '#D97706'}
+                              />
+                              <Text style={[styles.methodText, { color: isOnline ? '#2563EB' : '#D97706' }]}>
+                                {isOnline ? 'Online Payment' : 'Cash Desk'}
+                              </Text>
+                            </View>
+                            <Text style={styles.billDate}>{fmtDate(item.paidAt)}</Text>
+                          </View>
+                          <View style={styles.statusSuccessPill}>
+                            <Icon name="check" size={11} color={SUCCESS} />
+                            <Text style={styles.statusSuccessText}>PAID</Text>
+                          </View>
+                        </View>
+
+                        <View style={styles.billCardBody}>
+                          <Text style={styles.storeTitle} numberOfLines={1}>
+                            {item.storeName || 'Supermarket Branch'}
+                          </Text>
+                          <Text style={styles.amountText}>{fmt(item.totalAmount)}</Text>
+                        </View>
+
+                        <View style={styles.billCardFooter}>
+                          <Text style={styles.footerDetails}>
+                            {item.itemCount || (item.items ? item.items.length : 1)} Items · Ref #{item.billRef}
+                          </Text>
+                          <View style={styles.viewReceiptLink}>
+                            <Text style={styles.viewReceiptText}>View Receipt</Text>
+                            <Icon name="chevron-right" size={14} color={TEAL} />
+                          </View>
+                        </View>
+                      </TouchableOpacity>
+                  );
+                }}
             />
-          }
-          onEndReached={loadMore}
-          onEndReachedThreshold={0.3}
-          ListFooterComponent={hasMore ? <ActivityIndicator color="#2563EB" style={{ marginVertical: 12 }} /> : null}
-        />
-      )}
-    </View>
+        )}
+      </View>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: '#F9FAFB' },
-  loadingBox: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  flex: { flex: 1, backgroundColor: BG },
+  center: { justifyContent: 'center', alignItems: 'center' },
+
   header: {
-    paddingHorizontal: 20, paddingTop: 56, paddingBottom: 16,
-    backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#E5E7EB',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 54,
+    paddingBottom: 14,
+    backgroundColor: CARD_BG,
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER,
   },
-  headerTitle: { fontSize: 20, fontWeight: '800', color: '#111827' },
-  headerSub: { fontSize: 12, color: '#6B7280', marginTop: 2 },
-  headerTopRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  backBtn: { width: 32, height: 32, borderRadius: 8, backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center' },
-
-  list: { padding: 16, gap: 10 },
-
-  card: {
-    backgroundColor: '#fff', borderRadius: 14, overflow: 'hidden',
-    shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 6, elevation: 2,
+  backBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: BG,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  methodBadge: { paddingHorizontal: 12, paddingVertical: 6 },
-  cashBadge: { backgroundColor: '#FFFBEB' },
-  onlineBadge: { backgroundColor: '#EFF6FF' },
-  badgeText: { fontSize: 12, fontWeight: '700', color: '#374151' },
-  cardBody: { padding: 14, paddingTop: 8 },
-  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 },
-  storeName: { fontSize: 15, fontWeight: '700', color: '#111827', flex: 1 },
-  amount: { fontSize: 16, fontWeight: '800', color: '#059669' },
-  brandDate: { fontSize: 11, color: '#6B7280', marginBottom: 6 },
-  footer: { flexDirection: 'row', justifyContent: 'space-between' },
-  items: { fontSize: 12, color: '#6B7280' },
-  billRef: { fontSize: 11, color: '#9CA3AF', fontStyle: 'italic' },
+  headerTitle: { fontSize: 17, fontWeight: '800', color: INK },
+  headerSub: { fontSize: 12, color: MUTED, marginTop: 1 },
 
-  emptyBox: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
-  emptyIcon: { fontSize: 52, marginBottom: 16 },
-  emptyTitle: { fontSize: 18, fontWeight: '700', color: '#111827', marginBottom: 6 },
-  emptyText: { fontSize: 13, color: '#6B7280', textAlign: 'center', lineHeight: 18 },
+  listContent: { padding: 18, gap: 12 },
+  billCard: {
+    backgroundColor: CARD_BG,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: BORDER,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
+  },
+  billCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  billMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  methodBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  badgeOnline: { backgroundColor: '#EFF6FF' },
+  badgeCash: { backgroundColor: '#FEF3C7' },
+  methodText: { fontSize: 11, fontWeight: '700' },
+  billDate: { fontSize: 11, color: MUTED },
+  statusSuccessPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: SUCCESS_SOFT,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  statusSuccessText: { fontSize: 10, fontWeight: '800', color: SUCCESS },
+
+  billCardBody: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  storeTitle: { fontSize: 15, fontWeight: '700', color: INK, flex: 1, marginRight: 8 },
+  amountText: { fontSize: 17, fontWeight: '800', color: INK },
+
+  billCardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+  },
+  footerDetails: { fontSize: 11, color: MUTED, fontWeight: '500' },
+  viewReceiptLink: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  viewReceiptText: { fontSize: 12, fontWeight: '700', color: TEAL },
+
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  emptyIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    backgroundColor: TEAL_SOFT,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  emptyTitle: { fontSize: 16, fontWeight: '800', color: INK, marginBottom: 4 },
+  emptySubtitle: { fontSize: 13, color: MUTED, textAlign: 'center', lineHeight: 18 },
 });
