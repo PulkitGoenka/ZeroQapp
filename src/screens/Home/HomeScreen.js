@@ -1,20 +1,17 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import {
-    View, Text, TouchableOpacity, StyleSheet,
-    ScrollView, StatusBar,
+    View,
+    Text,
+    TouchableOpacity,
+    StyleSheet,
+    ScrollView,
+    StatusBar,
 } from 'react-native';
 import { Feather as Icon } from '@expo/vector-icons';
 import { useAuth } from '../../store/AuthContext';
 
 export default function HomeScreen({ navigation }) {
     const { user, session } = useAuth();
-
-    // Session hai to seedha StoreHome pe
-    useEffect(() => {
-        if (session) navigation.navigate('StoreHome');
-    }, [session]);
-
-    if (session) return null;
 
     const greeting = () => {
         const h = new Date().getHours();
@@ -23,7 +20,6 @@ export default function HomeScreen({ navigation }) {
         return 'Good Evening';
     };
 
-    // User ke naam ka pehla letter avatar ke liye
     const userInitial = user?.name ? user.name.charAt(0).toUpperCase() : 'U';
 
     return (
@@ -37,7 +33,6 @@ export default function HomeScreen({ navigation }) {
                     <Text style={styles.name}>{user?.name || 'Shopper'}</Text>
                 </View>
 
-                {/* Profile Avatar Icon (Clickable) */}
                 <TouchableOpacity
                     style={styles.profileBtn}
                     onPress={() => navigation.navigate('Profile')}
@@ -51,20 +46,43 @@ export default function HomeScreen({ navigation }) {
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
 
+                {/* Active Session Bar (Agar pehle se koi store chalu hai) */}
+                {session && (
+                    <TouchableOpacity
+                        style={styles.activeStoreBanner}
+                        onPress={() => navigation.navigate('StoreHome')}
+                        activeOpacity={0.85}
+                    >
+                        <View style={styles.activeStoreLeft}>
+                            <View style={styles.activePulseDot} />
+                            <View>
+                                <Text style={styles.activeStoreTag}>ACTIVE SHOPPING SESSION</Text>
+                                <Text style={styles.activeStoreName} numberOfLines={1}>{session.storeName || 'Store'}</Text>
+                            </View>
+                        </View>
+                        <View style={styles.resumeBtn}>
+                            <Text style={styles.resumeBtnText}>Resume</Text>
+                            <Icon name="arrow-right" size={14} color="#4E989E" />
+                        </View>
+                    </TouchableOpacity>
+                )}
+
                 {/* CTA Banner */}
                 <View style={styles.ctaCard}>
-                    <Text style={styles.ctaEmoji}>🛒</Text>
+                    <View style={styles.ctaIconBadge}>
+                        <Icon name="shopping-bag" size={28} color="#4E989E" />
+                    </View>
                     <Text style={styles.ctaTitle}>Ready to shop?</Text>
                     <Text style={styles.ctaText}>
                         Pick a brand, find your nearest store, scan products and pay — no queue needed.
                     </Text>
                     <TouchableOpacity
                         style={styles.ctaBtn}
-                        onPress={() => navigation.navigate('StoreDiscovery')}
+                        onPress={() => navigation.navigate(session ? 'StoreHome' : 'StoreDiscovery')}
                         activeOpacity={0.85}
                     >
                         <Icon name="tag" size={16} color="#412402" />
-                        <Text style={styles.ctaBtnText}>Select Brand</Text>
+                        <Text style={styles.ctaBtnText}>{session ? 'Go to Store Cart' : 'Select Brand & Store'}</Text>
                     </TouchableOpacity>
                 </View>
 
@@ -72,14 +90,16 @@ export default function HomeScreen({ navigation }) {
                 <Text style={styles.sectionTitle}>How It Works</Text>
                 <View style={styles.stepsCard}>
                     {[
-                        { n: '1', icon: '🏬', title: 'Pick Brand', sub: 'DMart, Reliance, BigBazaar...' },
-                        { n: '2', icon: '📍', title: 'Find Store', sub: 'By pincode, state, district or QR' },
-                        { n: '3', icon: '📷', title: 'Scan Items', sub: 'Point camera at barcode' },
-                        { n: '4', icon: '💳', title: 'Pay & Go', sub: 'Pay online, show QR at exit' },
+                        { n: '1', icon: 'grid', title: 'Pick Brand', sub: 'DMart, Reliance, BigBazaar...' },
+                        { n: '2', icon: 'map-pin', title: 'Find Store', sub: 'By pincode, state, district or QR' },
+                        { n: '3', icon: 'camera', title: 'Scan Items', sub: 'Point camera at barcode' },
+                        { n: '4', icon: 'credit-card', title: 'Pay & Go', sub: 'Pay online, show QR at exit' },
                     ].map(({ n, icon, title, sub }) => (
                         <View key={n} style={styles.stepRow}>
                             <View style={styles.stepNum}><Text style={styles.stepN}>{n}</Text></View>
-                            <Text style={styles.stepIcon}>{icon}</Text>
+                            <View style={styles.stepIconBox}>
+                                <Icon name={icon} size={16} color="#4E989E" />
+                            </View>
                             <View style={{ flex: 1 }}>
                                 <Text style={styles.stepTitle}>{title}</Text>
                                 <Text style={styles.stepSub}>{sub}</Text>
@@ -116,7 +136,6 @@ export default function HomeScreen({ navigation }) {
                     <Text style={styles.histText}>My Profile & Details</Text>
                     <Icon name="chevron-right" size={16} color="#9CA3AF" />
                 </TouchableOpacity>
-
             </ScrollView>
         </View>
     );
@@ -135,9 +154,7 @@ const styles = StyleSheet.create({
     },
     greeting: { fontSize: 13, color: '#6B7280', fontWeight: '500', marginBottom: 2 },
     name: { fontSize: 24, fontWeight: '800', color: '#111827' },
-    profileBtn: {
-        padding: 2,
-    },
+    profileBtn: { padding: 2 },
     avatarCircle: {
         width: 44,
         height: 44,
@@ -150,12 +167,35 @@ const styles = StyleSheet.create({
         shadowRadius: 6,
         elevation: 3,
     },
-    avatarText: {
-        color: '#FFFFFF',
-        fontSize: 18,
-        fontWeight: '800',
-    },
+    avatarText: { color: '#FFFFFF', fontSize: 18, fontWeight: '800' },
     scroll: { paddingHorizontal: 20, paddingBottom: 40 },
+
+    activeStoreBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        backgroundColor: '#EAF5F5',
+        borderWidth: 1.5,
+        borderColor: '#B6DCDC',
+        borderRadius: 16,
+        padding: 14,
+        marginBottom: 16,
+    },
+    activeStoreLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
+    activePulseDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#4E989E' },
+    activeStoreTag: { fontSize: 10, fontWeight: '800', color: '#4E989E', letterSpacing: 0.6 },
+    activeStoreName: { fontSize: 14, fontWeight: '700', color: '#111827', marginTop: 1 },
+    resumeBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: '#FFFFFF',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 8,
+    },
+    resumeBtnText: { fontSize: 12, fontWeight: '700', color: '#4E989E' },
+
     ctaCard: {
         backgroundColor: '#4E989E',
         borderRadius: 20,
@@ -167,7 +207,15 @@ const styles = StyleSheet.create({
         shadowRadius: 14,
         elevation: 5,
     },
-    ctaEmoji: { fontSize: 52, marginBottom: 12 },
+    ctaIconBadge: {
+        width: 54,
+        height: 54,
+        borderRadius: 16,
+        backgroundColor: '#EAF5F5',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 12,
+    },
     ctaTitle: { fontSize: 20, fontWeight: '800', color: '#FFFFFF', marginBottom: 8 },
     ctaText: {
         fontSize: 13,
@@ -212,7 +260,14 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     stepN: { fontSize: 13, fontWeight: '800', color: '#4E989E' },
-    stepIcon: { fontSize: 20 },
+    stepIconBox: {
+        width: 28,
+        height: 28,
+        borderRadius: 8,
+        backgroundColor: '#F9FAFB',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
     stepTitle: { fontSize: 13, fontWeight: '700', color: '#111827' },
     stepSub: { fontSize: 12, color: '#6B7280', marginTop: 1 },
     histRow: {
