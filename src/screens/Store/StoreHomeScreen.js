@@ -1,181 +1,275 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState } from 'react';
 import {
-    View, Text, TouchableOpacity, StyleSheet,
-    ScrollView, Alert, StatusBar, ActivityIndicator,
+    View, Text, TextInput, TouchableOpacity, StyleSheet,
+    ScrollView, ActivityIndicator, Alert, Modal,
 } from 'react-native';
 import { Feather as Icon } from '@expo/vector-icons';
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import {
+    findStoresByPincode, findStoresByState, findStoresByDistrict,
+    findStoreByQr, startSession, endSession,
+} from '../../services/api';
 import { useAuth } from '../../store/AuthContext';
-import { endSession, getCart } from '../../services/api';
 
-export default function StoreHomeScreen({ navigation }) {
-    const { user, session, clearSession } = useAuth();
-    const [cart, setCart]     = useState(null);
-    const [loading, setLoading] = useState(true);
+const TABS = ['Pincode', 'State', 'District'];
 
-    const loadCart = useCallback(async () => {
-        try { const r = await getCart(); setCart(r.data); }
-        catch { setCart(null); }
-        finally { setLoading(false); }
-    }, []);
+export default function StoreSelectScreen({ navigation, route }) {
+    const { brandId, brandName } = route.params || {};
+    const { session, saveSession, clearSession } = useAuth();
 
-    useEffect(() => {
-        loadCart();
-        const unsub = navigation.addListener('focus', loadCart);
-        return unsub;
-    }, [navigation, loadCart]);
+    const [qrOpen, setQrOpen]     = useState(false);
+    const [qrScanned, setQrScanned] = useState(false);
+    const [permission, requestPermission] = useCameraPermissions();
 
-    const handleExit = () => {
-        Alert.alert('End Session', `Leave ${session?.storeName}? Cart will be cleared.`, [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'End Session', style: 'destructive', onPress: async () => {
-                    try { await endSession(); } catch {}
-                    await clearSession();
-                    navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
-                }},
-        ]);
+    const [tab,      setTab]      = useState(0);
+    const [pincode,  setPincode]  = useState('');
+    const [state,    setState]    = useState('');
+    const [district, setDistrict] = useState('');
+    const [stores,   setStores]   = useState([]);
+    const [loading,  setLoading]  = useState(false);
+    const [starting, setStarting] = useState(null);
+
+    const openQr = async () => {
+        if (!permission?.granted) {
+            const r = await requestPermission();
+            if (!r.granted) { Alert.alert('Camera needed', 'Allow camera to scan store QR.'); return; }
+        }
+        setQrScanned(false); setQrOpen(true);
     };
 
-    const count = cart?.itemCount || 0;
-    const total = cart?.totalAmount || 0;
+    const handleQrScanned = async ({ data }) => {
+        if (qrScanned) return;
+        setQrScanned(true); setQrOpen(false);
+        try {
+            const res = await findStoreByQr(data);
+            if (res.data) await enterStore(res.data);
+            else { Alert.alert('Invalid QR', 'Not a valid store QR.'); setQrScanned(false); }
+        } catch (e) { Alert.alert('Error', e.message); setQrScanned(false); }
+    };
+
+    const search = async () => {
+        setLoading(true); setStores([]);
+        try {
+            let res;
+            if (tab === 0) {
+                if (!/^\d{6}$/.test(pincode.trim())) { Alert.alert('Invalid', '6-digit pincode required.'); return; }
+                res = await findStoresByPincode(pincode.trim(), brandId);
+            } else if (tab === 1) {
+                if (!state.trim()) { Alert.alert('Enter state', 'State name required.'); return; }
+                res = await findStoresByState(state.trim(), brandId);
+            } else {
+                if (!district.trim()) { Alert.alert('Enter district', 'District name required.'); return; }
+                res = await findStoresByDistrict(district.trim(), brandId);
+            }
+            const list = res.data || [];
+            setStores(list);
+            if (!list.length) Alert.alert('No stores', `No ${brandName || ''} stores found here.`);
+        } catch (e) { Alert.alert('Error', e.message); }
+        finally { setLoading(false); }
+    };
+
+    const enterStore = async (store) => {
+        if (session) {
+            Alert.alert('Active session', `End session at ${session.storeName} and enter ${store.name}?`, [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Switch', style: 'destructive', onPress: async () => {
+                        try { await endSession(); } catch {}
+                        await clearSession();
+                        const r = await startSession(store.id);
+                        await saveSession(r.data);
+                        navigation.navigate('StoreHome');
+                    }},
+            ]);
+            return;
+        }
+        setStarting(store.id);
+        try {
+            const r = await startSession(store.id);
+            await saveSession(r.data);
+            navigation.navigate('StoreHome');
+        } catch (e) { Alert.alert('Error', e.message); }
+        finally { setStarting(null); }
+    };
+
+    const val = tab === 0 ? pincode : tab === 1 ? state : district;
 
     return (
         <View style={styles.flex}>
-            <StatusBar barStyle="light-content" backgroundColor="#1E40AF" />
-
-            {/* Header */}
             <View style={styles.header}>
-                <View style={styles.headerRow}>
-                    <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBtn}>
-                        <Icon name="arrow-left" size={18} color="#fff" />
-                    </TouchableOpacity>
-                    <View style={styles.headerInfo}>
-                        <Text style={styles.storeName} numberOfLines={1}>{session?.storeName || 'Store'}</Text>
-                        <View style={styles.activeRow}>
-                            <View style={styles.dot} />
-                            <Text style={styles.activeText}>Session active</Text>
-                        </View>
-                    </View>
-                    <TouchableOpacity onPress={handleExit} style={styles.exitBtn}>
-                        <Icon name="log-out" size={14} color="#FCA5A5" />
-                        <Text style={styles.exitText}>Exit</Text>
-                    </TouchableOpacity>
+                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+                    <Icon name="arrow-left" size={20} color="#374151" />
+                </TouchableOpacity>
+                <View style={styles.headerCenter}>
+                    <Text style={styles.headerTitle}>Select Store</Text>
+                    {brandName && <View style={styles.pill}><Text style={styles.pillText}>{brandName}</Text></View>}
                 </View>
-                {/* User row */}
-                <View style={styles.userRow}>
-                    <View style={styles.avatar}>
-                        <Text style={styles.avatarText}>{user?.name?.charAt(0)?.toUpperCase() || '?'}</Text>
-                    </View>
-                    <Text style={styles.userName}>Hi, {user?.name?.split(' ')[0] || 'Shopper'} 👋</Text>
-                </View>
+                <View style={{ width: 36 }} />
             </View>
 
-            <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+            <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
 
-                {/* Scan — primary action */}
-                <TouchableOpacity style={styles.scanCard} onPress={() => navigation.navigate('Scanner')} activeOpacity={0.85}>
-                    <View style={styles.scanIcon}>
-                        <Icon name="camera" size={34} color="#2563EB" />
-                    </View>
+                {/* QR Option */}
+                <Text style={styles.optLabel}>Option 1 — Scan Store QR</Text>
+                <TouchableOpacity style={styles.qrCard} onPress={openQr}>
+                    <View style={styles.qrIcon}><Icon name="maximize" size={28} color="#2563EB" /></View>
                     <View style={{ flex: 1 }}>
-                        <Text style={styles.scanTitle}>Scan Product</Text>
-                        <Text style={styles.scanSub}>Point camera at barcode to add to cart</Text>
+                        <Text style={styles.qrTitle}>Scan QR Code</Text>
+                        <Text style={styles.qrSub}>Point camera at store entrance QR</Text>
                     </View>
-                    <View style={styles.scanArrow}>
-                        <Icon name="chevron-right" size={20} color="#2563EB" />
-                    </View>
+                    <Icon name="chevron-right" size={18} color="#2563EB" />
                 </TouchableOpacity>
 
-                {/* Cart + Pay */}
-                <View style={styles.row}>
-                    <TouchableOpacity style={[styles.actionCard, { backgroundColor: '#ECFDF5' }]}
-                                      onPress={() => navigation.navigate('Cart')} activeOpacity={0.8}>
-                        <View style={[styles.actionIcon, { backgroundColor: '#D1FAE5' }]}>
-                            <Icon name="shopping-cart" size={22} color="#059669" />
-                            {count > 0 && <View style={styles.badge}><Text style={styles.badgeText}>{count}</Text></View>}
-                        </View>
-                        <Text style={[styles.actionTitle, { color: '#059669' }]}>My Cart</Text>
-                        <Text style={styles.actionSub}>{loading ? '...' : count > 0 ? `${count} items` : 'Empty'}</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity style={[styles.actionCard, { backgroundColor: '#F5F3FF' }]}
-                                      onPress={() => {
-                                          if (count === 0) { Alert.alert('Cart empty', 'Scan products first.'); return; }
-                                          navigation.navigate('Payment');
-                                      }} activeOpacity={0.8}>
-                        <View style={[styles.actionIcon, { backgroundColor: '#EDE9FE' }]}>
-                            <Icon name="credit-card" size={22} color="#7C3AED" />
-                        </View>
-                        <Text style={[styles.actionTitle, { color: '#7C3AED' }]}>Pay Now</Text>
-                        <Text style={styles.actionSub}>{count > 0 ? `₹${total}` : 'Add items first'}</Text>
-                    </TouchableOpacity>
+                <View style={styles.divRow}>
+                    <View style={styles.divLine} />
+                    <Text style={styles.divText}>OR</Text>
+                    <View style={styles.divLine} />
                 </View>
 
-                {/* History */}
-                <TouchableOpacity style={styles.histRow} onPress={() => navigation.navigate('History')}>
-                    <Icon name="clock" size={15} color="#6B7280" />
-                    <Text style={styles.histText}>View past orders</Text>
-                    <Icon name="chevron-right" size={15} color="#9CA3AF" />
-                </TouchableOpacity>
-
-                {/* Tips */}
-                <View style={styles.tipsCard}>
-                    <Text style={styles.tipsTitle}>How to shop</Text>
-                    {[
-                        { icon: 'camera',        text: 'Tap "Scan Product" and point at barcode' },
-                        { icon: 'shopping-cart', text: 'Items appear in cart automatically' },
-                        { icon: 'plus-circle',   text: 'Scan again to increase quantity' },
-                        { icon: 'credit-card',   text: 'Tap "Pay Now" when done shopping' },
-                    ].map(({ icon, text }, i) => (
-                        <View key={i} style={styles.tipRow}>
-                            <View style={styles.tipIcon}><Icon name={icon} size={16} color="#2563EB" /></View>
-                            <Text style={styles.tipText}>{text}</Text>
-                        </View>
+                {/* Search Option */}
+                <Text style={styles.optLabel}>Option 2 — Search by Location</Text>
+                <View style={styles.tabs}>
+                    {TABS.map((t, i) => (
+                        <TouchableOpacity key={t} onPress={() => { setTab(i); setStores([]); }}
+                                          style={[styles.tab, tab === i && styles.tabActive]}>
+                            <Text style={[styles.tabText, tab === i && styles.tabTextActive]}>{t}</Text>
+                        </TouchableOpacity>
                     ))}
                 </View>
 
+                <TextInput
+                    style={styles.input}
+                    placeholder={tab === 0 ? 'e.g. 201014' : tab === 1 ? 'e.g. Uttar Pradesh' : 'e.g. Ghaziabad'}
+                    placeholderTextColor="#9CA3AF"
+                    keyboardType={tab === 0 ? 'number-pad' : 'default'}
+                    maxLength={tab === 0 ? 6 : undefined}
+                    value={val}
+                    onChangeText={tab === 0 ? setPincode : tab === 1 ? setState : setDistrict}
+                    autoCapitalize={tab === 0 ? 'none' : 'words'}
+                />
+
+                <TouchableOpacity
+                    style={[styles.searchBtn, (!val.trim() || loading) && styles.btnOff]}
+                    onPress={search} disabled={!val.trim() || loading}
+                >
+                    {loading ? <ActivityIndicator color="#fff" />
+                        : <><Icon name="search" size={16} color="#fff" /><Text style={styles.searchBtnText}>Find Stores</Text></>
+                    }
+                </TouchableOpacity>
+
+                {stores.length > 0 && (
+                    <>
+                        <Text style={styles.resultsLabel}>{stores.length} store{stores.length > 1 ? 's' : ''} found</Text>
+                        {stores.map(s => (
+                            <TouchableOpacity key={s.id} style={styles.storeCard} onPress={() => enterStore(s)} disabled={starting === s.id}>
+                                <View style={styles.storeLogo}><Text style={styles.storeLogoText}>{s.brandName?.charAt(0) || '?'}</Text></View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.storeName}>{s.name}</Text>
+                                    <Text style={styles.storeAddr} numberOfLines={1}>{s.address}, {s.city}</Text>
+                                    <Text style={styles.storeMeta}>{s.pincode} · {s.district} · {s.state}</Text>
+                                </View>
+                                {starting === s.id
+                                    ? <ActivityIndicator color="#2563EB" />
+                                    : <View style={styles.enterBtn}><Text style={styles.enterText}>Enter</Text></View>
+                                }
+                            </TouchableOpacity>
+                        ))}
+                    </>
+                )}
             </ScrollView>
+
+            {/* QR Modal */}
+            <Modal visible={qrOpen} animationType="slide" onRequestClose={() => setQrOpen(false)}>
+                <View style={{ flex: 1, backgroundColor: '#000' }}>
+                    <View style={styles.qrModalHeader}>
+                        <TouchableOpacity onPress={() => setQrOpen(false)} style={styles.qrClose}>
+                            <Icon name="x" size={22} color="#fff" />
+                        </TouchableOpacity>
+                        <Text style={styles.qrModalTitle}>Scan Store QR</Text>
+                        <View style={{ width: 36 }} />
+                    </View>
+                    <CameraView style={StyleSheet.absoluteFill} facing="back"
+                                barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+                                onBarcodeScanned={qrScanned ? undefined : handleQrScanned}
+                    />
+                    <View style={styles.qrOverlay}>
+                        <View style={styles.qrFrame}>
+                            {[styles.cTL, styles.cTR, styles.cBL, styles.cBR].map((c, i) =>
+                                <View key={i} style={[styles.corner, c]} />)}
+                        </View>
+                        <Text style={styles.qrHint}>Point at store entrance QR</Text>
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 }
 
+const C = { position:'absolute', width:28, height:28, borderColor:'#fff' };
 const styles = StyleSheet.create({
     flex: { flex: 1, backgroundColor: '#F9FAFB' },
-    header: { backgroundColor: '#1E40AF', paddingTop: 52, paddingBottom: 16, paddingHorizontal: 16 },
-    headerRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
-    headerBtn: { width: 32, height: 32, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center' },
-    headerInfo: { flex: 1 },
-    storeName: { fontSize: 16, fontWeight: '700', color: '#fff' },
-    activeRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 3 },
-    dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#4ADE80' },
-    activeText: { fontSize: 11, color: '#93C5FD' },
-    exitBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(255,255,255,0.12)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
-    exitText: { fontSize: 12, color: '#FCA5A5', fontWeight: '700' },
-    userRow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 10, padding: 10 },
-    avatar: { width: 32, height: 32, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.25)', justifyContent: 'center', alignItems: 'center' },
-    avatarText: { color: '#fff', fontWeight: '800', fontSize: 15 },
-    userName: { color: '#fff', fontSize: 14, fontWeight: '600' },
-    scroll: { padding: 16, paddingBottom: 40, gap: 12 },
-    scanCard: {
-        backgroundColor: '#EFF6FF', borderRadius: 16, padding: 18,
-        flexDirection: 'row', alignItems: 'center', gap: 14,
-        borderWidth: 1.5, borderColor: '#BFDBFE',
+    header: {
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+        paddingHorizontal: 16, paddingTop: 52, paddingBottom: 14,
+        backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#E5E7EB',
     },
-    scanIcon: { width: 62, height: 62, borderRadius: 14, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center', shadowColor: '#2563EB', shadowOpacity: 0.12, shadowRadius: 8, elevation: 3 },
-    scanTitle: { fontSize: 17, fontWeight: '700', color: '#1E3A8A' },
-    scanSub: { fontSize: 12, color: '#6B7280', marginTop: 3 },
-    scanArrow: {},
-    row: { flexDirection: 'row', gap: 12 },
-    actionCard: { flex: 1, borderRadius: 14, padding: 14, gap: 6 },
-    actionIcon: { width: 46, height: 46, borderRadius: 12, justifyContent: 'center', alignItems: 'center', position: 'relative' },
-    badge: { position: 'absolute', top: -4, right: -4, width: 18, height: 18, borderRadius: 9, backgroundColor: '#059669', justifyContent: 'center', alignItems: 'center' },
-    badgeText: { color: '#fff', fontSize: 10, fontWeight: '800' },
-    actionTitle: { fontSize: 14, fontWeight: '700' },
-    actionSub: { fontSize: 11, color: '#9CA3AF' },
-    histRow: { backgroundColor: '#fff', borderRadius: 12, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 0.5, borderColor: '#E5E7EB' },
-    histText: { flex: 1, fontSize: 13, color: '#6B7280' },
-    tipsCard: { backgroundColor: '#fff', borderRadius: 16, padding: 16, borderWidth: 0.5, borderColor: '#E5E7EB', gap: 12 },
-    tipsTitle: { fontSize: 13, fontWeight: '700', color: '#374151' },
-    tipRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-    tipIcon: { width: 30, height: 30, borderRadius: 8, backgroundColor: '#EFF6FF', justifyContent: 'center', alignItems: 'center' },
-    tipText: { flex: 1, fontSize: 13, color: '#6B7280', lineHeight: 18 },
+    backBtn: { width: 36, height: 36, justifyContent: 'center', alignItems: 'center' },
+    headerCenter: { alignItems: 'center', gap: 4 },
+    headerTitle: { fontSize: 17, fontWeight: '700', color: '#111827' },
+    pill: { backgroundColor: '#EFF6FF', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 20 },
+    pillText: { fontSize: 11, fontWeight: '700', color: '#2563EB' },
+    scroll: { padding: 20, paddingBottom: 48 },
+    optLabel: { fontSize: 11, fontWeight: '700', color: '#6B7280', letterSpacing: 0.6, marginBottom: 10, textTransform: 'uppercase' },
+    qrCard: {
+        backgroundColor: '#EFF6FF', borderRadius: 14, padding: 16,
+        flexDirection: 'row', alignItems: 'center', gap: 14,
+        borderWidth: 1.5, borderColor: '#BFDBFE', marginBottom: 24,
+    },
+    qrIcon: { width: 52, height: 52, borderRadius: 12, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center' },
+    qrTitle: { fontSize: 15, fontWeight: '700', color: '#1E3A8A' },
+    qrSub: { fontSize: 12, color: '#6B7280', marginTop: 2 },
+    divRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 20 },
+    divLine: { flex: 1, height: 1, backgroundColor: '#E5E7EB' },
+    divText: { fontSize: 12, fontWeight: '700', color: '#9CA3AF' },
+    tabs: { flexDirection: 'row', backgroundColor: '#F3F4F6', borderRadius: 12, padding: 4, marginBottom: 14 },
+    tab: { flex: 1, paddingVertical: 8, borderRadius: 8, alignItems: 'center' },
+    tabActive: { backgroundColor: '#fff', shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 4, elevation: 2 },
+    tabText: { fontSize: 13, fontWeight: '600', color: '#6B7280' },
+    tabTextActive: { color: '#2563EB' },
+    input: {
+        height: 48, backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 16,
+        fontSize: 15, color: '#111827', borderWidth: 1, borderColor: '#E5E7EB', marginBottom: 12,
+    },
+    searchBtn: {
+        backgroundColor: '#2563EB', height: 48, borderRadius: 12,
+        flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, marginBottom: 24,
+    },
+    btnOff: { opacity: 0.45 },
+    searchBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+    resultsLabel: { fontSize: 13, fontWeight: '600', color: '#6B7280', marginBottom: 10 },
+    storeCard: {
+        backgroundColor: '#fff', borderRadius: 14, padding: 14,
+        flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10,
+        shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 6, elevation: 2,
+    },
+    storeLogo: { width: 46, height: 46, borderRadius: 12, backgroundColor: '#EFF6FF', justifyContent: 'center', alignItems: 'center' },
+    storeLogoText: { fontSize: 20, fontWeight: '800', color: '#2563EB' },
+    storeName: { fontSize: 14, fontWeight: '700', color: '#111827' },
+    storeAddr: { fontSize: 12, color: '#6B7280', marginTop: 2 },
+    storeMeta: { fontSize: 11, color: '#9CA3AF', marginTop: 2 },
+    enterBtn: { backgroundColor: '#2563EB', paddingHorizontal: 14, paddingVertical: 7, borderRadius: 8 },
+    enterText: { color: '#fff', fontWeight: '700', fontSize: 12 },
+    qrModalHeader: {
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+        paddingHorizontal: 16, paddingTop: 52, paddingBottom: 16, zIndex: 10,
+    },
+    qrClose: { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
+    qrModalTitle: { fontSize: 16, fontWeight: '700', color: '#fff' },
+    qrOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center' },
+    qrFrame: { width: 220, height: 220, position: 'relative' },
+    corner: C,
+    cTL: { top:0, left:0, borderTopWidth:3, borderLeftWidth:3, borderTopLeftRadius:4 },
+    cTR: { top:0, right:0, borderTopWidth:3, borderRightWidth:3, borderTopRightRadius:4 },
+    cBL: { bottom:0, left:0, borderBottomWidth:3, borderLeftWidth:3, borderBottomLeftRadius:4 },
+    cBR: { bottom:0, right:0, borderBottomWidth:3, borderRightWidth:3, borderBottomRightRadius:4 },
+    qrHint: { color: '#E5E7EB', fontSize: 13, fontWeight: '500', marginTop: 24 },
 });

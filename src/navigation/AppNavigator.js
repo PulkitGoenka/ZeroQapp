@@ -7,20 +7,19 @@ import { Feather as Icon } from '@expo/vector-icons';
 import { useAuth } from '../store/AuthContext';
 
 // Screens
-import SplashScreen     from '../screens/Loading/SplashScreen';
-import LoginScreen      from '../screens/Auth/LoginScreen';
-import OtpScreen        from '../screens/Auth/OtpScreen';
-import HomeScreen       from '../screens/Home/HomeScreen';
-import ProfileScreen    from '../screens/Profile/ProfileScreen'; // <-- Profile Screen Add Kiya
-import BrandSelectScreen from '../screens/Brand/Brandselectscreen';
-import StoreSelectScreen from '../screens/Store/StoreSelectScreen';
-import StoreHomeScreen  from '../screens/Store/StoreHomeScreen';
-import CartScreen       from '../screens/Cart/CartScreen';
-import ScannerScreen    from '../screens/Cart/ScannerScreen';
-import PaymentScreen    from '../screens/Payment/PaymentScreen';
-import OnlineCheckoutScreen from '../screens/Payment/OnlineCheckoutScreen';
-import PaymentQrScreen  from '../screens/Payment/PaymentQrScreen';
-import HistoryScreen    from '../screens/History/HistoryScreen';
+import SplashScreen          from '../screens/Loading/SplashScreen';
+import LoginScreen           from '../screens/Auth/LoginScreen';
+import OtpScreen             from '../screens/Auth/OtpScreen';
+import HomeScreen            from '../screens/Home/HomeScreen';
+import ProfileScreen         from '../screens/Profile/ProfileScreen';
+import StoreDiscoveryScreen  from '../screens/Store/StoreDiscoveryScreen'; // <-- Nayi Unified Screen
+import StoreHomeScreen       from '../screens/Store/StoreHomeScreen';
+import CartScreen            from '../screens/Cart/CartScreen';
+import ScannerScreen         from '../screens/Cart/ScannerScreen';
+import PaymentScreen         from '../screens/Payment/PaymentScreen';
+import OnlineCheckoutScreen  from '../screens/Payment/OnlineCheckoutScreen';
+import PaymentQrScreen       from '../screens/Payment/PaymentQrScreen';
+import HistoryScreen         from '../screens/History/HistoryScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab   = createBottomTabNavigator();
@@ -32,7 +31,7 @@ function MainTabs() {
         <Tab.Navigator
             screenOptions={({ route }) => ({
                 headerShown: false,
-                tabBarActiveTintColor: '#4E989E', // Theme matching teal
+                tabBarActiveTintColor: '#4E989E',
                 tabBarInactiveTintColor: '#9CA3AF',
                 tabBarStyle: {
                     backgroundColor: '#fff',
@@ -50,7 +49,7 @@ function MainTabs() {
                         Home: 'home',
                         Cart: 'shopping-cart',
                         History: 'clock',
-                        Profile: 'user', // Profile icon
+                        Profile: 'user',
                     };
 
                     return (
@@ -76,8 +75,14 @@ function AppStack() {
         <Stack.Navigator screenOptions={{ headerShown: false }}>
             <Stack.Screen name="MainTabs"       component={MainTabs} />
             <Stack.Screen name="Profile"        component={ProfileScreen} />
-            <Stack.Screen name="BrandSelect"    component={BrandSelectScreen} />
-            <Stack.Screen name="StoreSelect"    component={StoreSelectScreen} />
+
+            {/* Unified Discovery Screen */}
+            <Stack.Screen name="StoreDiscovery" component={StoreDiscoveryScreen} />
+
+            {/* Backwards compatibility ke liye purane names par bhi same screen render hogi */}
+            <Stack.Screen name="BrandSelect"    component={StoreDiscoveryScreen} />
+            <Stack.Screen name="StoreSelect"    component={StoreDiscoveryScreen} />
+
             <Stack.Screen name="StoreHome"      component={StoreHomeScreen} />
             <Stack.Screen name="Cart"           component={CartScreen} />
             <Stack.Screen name="History"        component={HistoryScreen} />
@@ -92,9 +97,8 @@ function AppStack() {
 function AuthStack() {
     return (
         <Stack.Navigator screenOptions={{ headerShown: false }}>
-            {/* Splash se aane ke baad seedha Login pehle render hoga */}
-            <Stack.Screen name="Login"  component={LoginScreen} />
-            <Stack.Screen name="Otp"    component={OtpScreen} />
+            <Stack.Screen name="Login" component={LoginScreen} />
+            <Stack.Screen name="Otp"   component={OtpScreen} />
         </Stack.Navigator>
     );
 }
@@ -103,7 +107,6 @@ export default function AppNavigator() {
     const { user, isLoading } = useAuth();
     const [isSplashDone, setIsSplashDone] = useState(false);
 
-    // Initial Splash Screen tab tak chalega jab tak auth check na ho jaye
     if (isLoading || !isSplashDone) {
         return (
             <SafeAreaProvider>

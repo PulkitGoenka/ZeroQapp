@@ -7,7 +7,7 @@ import { Feather as Icon } from '@expo/vector-icons';
 import { getBrands } from '../../services/api';
 import { useAuth } from '../../store/AuthContext';
 
-const COLORS = ['#2563EB','#059669','#D97706','#7C3AED','#DC2626','#0891B2'];
+const COLORS = ['#4E989E', '#3F7276', '#6BAAAF', '#2E5457', '#5C9FA4', '#457D81'];
 
 export default function BrandSelectScreen({ navigation }) {
     const { clearSession } = useAuth();
@@ -45,17 +45,16 @@ export default function BrandSelectScreen({ navigation }) {
             <TouchableOpacity
                 style={styles.card}
                 onPress={() => navigation.navigate('StoreSelect', { brandId: item.id, brandName: item.name })}
-                activeOpacity={0.8}
+                activeOpacity={0.85}
             >
-                <View style={[styles.logo, { backgroundColor: color + '18' }]}>
-                    <Text style={[styles.logoText, { color }]}>{item.name?.charAt(0) || '?'}</Text>
+                <View style={[styles.cardTop, { backgroundColor: color }]}>
+                    <Icon name="shopping-bag" size={24} color="#fff" />
                 </View>
-                <View style={styles.info}>
-                    <Text style={styles.name}>{item.name}</Text>
-                    {item.description ? <Text style={styles.desc} numberOfLines={1}>{item.description}</Text> : null}
-                </View>
-                <View style={[styles.arrow, { backgroundColor: color + '18' }]}>
-                    <Icon name="chevron-right" size={18} color={color} />
+                <View style={styles.cardBody}>
+                    <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
+                    {item.description
+                        ? <Text style={styles.desc} numberOfLines={1}>{item.description}</Text>
+                        : <Text style={styles.desc} numberOfLines={1}>Tap to find a store</Text>}
                 </View>
             </TouchableOpacity>
         );
@@ -76,7 +75,7 @@ export default function BrandSelectScreen({ navigation }) {
             </View>
 
             {loading
-                ? <View style={styles.center}><ActivityIndicator size="large" color="#2563EB" /></View>
+                ? <View style={styles.center}><ActivityIndicator size="large" color="#4E989E" /></View>
                 : brands.length === 0
                     ? <View style={styles.center}>
                         <Icon name="alert-circle" size={40} color="#D1D5DB" />
@@ -89,8 +88,11 @@ export default function BrandSelectScreen({ navigation }) {
                         data={brands}
                         keyExtractor={i => i.id}
                         renderItem={renderItem}
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
                         contentContainerStyle={styles.list}
-                        showsVerticalScrollIndicator={false}
+                        snapToAlignment="start"
+                        decelerationRate="fast"
                     />
             }
         </View>
@@ -109,18 +111,18 @@ const styles = StyleSheet.create({
     headerSub: { fontSize: 12, color: '#6B7280', textAlign: 'center', marginTop: 2 },
     center: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
     emptyText: { fontSize: 14, color: '#9CA3AF' },
-    retryBtn: { backgroundColor: '#EFF6FF', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 10 },
-    retryText: { color: '#2563EB', fontWeight: '700' },
-    list: { padding: 16, gap: 10 },
+    retryBtn: { backgroundColor: '#EAF5F5', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 10 },
+    retryText: { color: '#4E989E', fontWeight: '700' },
+    // horizontal row, not a vertical column — this is the left/right scroll list
+    list: { paddingHorizontal: 16, paddingVertical: 20, gap: 12 },
     card: {
-        backgroundColor: '#fff', borderRadius: 16, padding: 16,
-        flexDirection: 'row', alignItems: 'center', gap: 14,
-        shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 2,
+        width: 150, borderRadius: 18, backgroundColor: '#fff', overflow: 'hidden',
+        shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8, elevation: 2,
     },
-    logo: { width: 52, height: 52, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
-    logoText: { fontSize: 24, fontWeight: '800' },
-    info: { flex: 1 },
-    name: { fontSize: 16, fontWeight: '700', color: '#111827' },
-    desc: { fontSize: 12, color: '#6B7280', marginTop: 2 },
-    arrow: { width: 34, height: 34, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
+    cardTop: {
+        height: 72, justifyContent: 'center', alignItems: 'center',
+    },
+    cardBody: { paddingHorizontal: 12, paddingVertical: 10 },
+    name: { fontSize: 14, fontWeight: '700', color: '#111827' },
+    desc: { fontSize: 11, color: '#6B7280', marginTop: 2 },
 });

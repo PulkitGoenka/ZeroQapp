@@ -49,7 +49,7 @@ export default function CartScreen({ navigation }) {
         <View style={styles.emptyIcon}><Icon name="shopping-cart" size={36} color="#9CA3AF" /></View>
         <Text style={styles.emptyTitle}>No active session</Text>
         <Text style={styles.emptySub}>Select a brand and store to start shopping.</Text>
-        <TouchableOpacity style={styles.emptyBtn} onPress={() => navigation.navigate('BrandSelect')}>
+        <TouchableOpacity style={styles.emptyBtn} onPress={() => navigation.navigate('StoreDiscoveryScreen')}>
           <Icon name="tag" size={14} color="#fff" />
           <Text style={styles.emptyBtnText}>Select Brand</Text>
         </TouchableOpacity>
