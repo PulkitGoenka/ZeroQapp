@@ -60,7 +60,7 @@ export default function HomeScreen({ navigation }) {
                     </Text>
                     <TouchableOpacity
                         style={styles.ctaBtn}
-                        onPress={() => navigation.navigate('StoreDiscoveryScreen')}
+                        onPress={() => navigation.navigate('StoreDiscovery')}
                         activeOpacity={0.85}
                     >
                         <Icon name="tag" size={16} color="#412402" />

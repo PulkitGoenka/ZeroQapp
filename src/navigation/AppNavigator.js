@@ -78,11 +78,6 @@ function AppStack() {
 
             {/* Unified Discovery Screen */}
             <Stack.Screen name="StoreDiscovery" component={StoreDiscoveryScreen} />
-
-            {/* Backwards compatibility ke liye purane names par bhi same screen render hogi */}
-            <Stack.Screen name="BrandSelect"    component={StoreDiscoveryScreen} />
-            <Stack.Screen name="StoreSelect"    component={StoreDiscoveryScreen} />
-
             <Stack.Screen name="StoreHome"      component={StoreHomeScreen} />
             <Stack.Screen name="Cart"           component={CartScreen} />
             <Stack.Screen name="History"        component={HistoryScreen} />
