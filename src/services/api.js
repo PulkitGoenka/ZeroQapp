@@ -6,7 +6,6 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-
 export const BASE_URL = 'https://zeroq-backend.onrender.com';
 
 // ── Token helpers ──────────────────────────────────────────────
@@ -124,35 +123,42 @@ export const getBrands = () =>
     apiFetch('/api/v1/brands', {}, false);
 
 // ══════════════════════════════════════════════════════════════
-//  STORE ENDPOINTS
+//  STORE ENDPOINTS (FIXED TO USE apiFetch)
 // ══════════════════════════════════════════════════════════════
 
-/** Find stores by pincode, filtered by the brand selected earlier */
-export const findStoresByPincode = (pincode, brandId = null) =>
+/** 1. Pincode (POST Request with Request Body) */
+export const findStoresByPincode = (pincode, brandId) =>
     apiFetch('/api/v1/stores/by-pincode', {
         method: 'POST',
-        // brandId must always be a plain string (or null) — never an object.
-        // Sending {leastSigBits, mostSigBits} crashes Jackson's UUID parser.
-        body: JSON.stringify({ pincode, brandId: brandId ? String(brandId) : null }),
-    }, false);
+        body: JSON.stringify({
+            pincode: pincode.trim(),
+            brandId: brandId || null,
+        }),
+    });
 
-/** Find stores by state, filtered by the brand selected earlier */
-export const findStoresByState = (state, brandId = null) =>
-    apiFetch('/api/v1/stores/by-state', {
-        method: 'POST',
-        body: JSON.stringify({ state, brandId: brandId ? String(brandId) : null }),
-    }, false);
-
-/** Find stores by district, filtered by brand */
-export const findStoresByDistrict = (district, brandId = null) =>
+/** 2. District (POST Request with Request Body) */
+export const findStoresByDistrict = (district, brandId) =>
     apiFetch('/api/v1/stores/by-district', {
         method: 'POST',
-        body: JSON.stringify({ district, brandId: brandId ? String(brandId) : null }),
-    }, false);
+        body: JSON.stringify({
+            district: district.trim(),
+            brandId: brandId || null,
+        }),
+    });
 
-/** Find store by QR code (public, no auth needed) */
+/** 3. State (POST Request with Request Body) */
+export const findStoresByState = (state, brandId) =>
+    apiFetch('/api/v1/stores/by-state', {
+        method: 'POST',
+        body: JSON.stringify({
+            state: state.trim(),
+            brandId: brandId || null,
+        }),
+    });
+
+/** 4. QR Code (GET Request) */
 export const findStoreByQr = (qrCode) =>
-    apiFetch(`/api/v1/stores/by-qr/${qrCode}`, {}, false);
+    apiFetch(`/api/v1/stores/by-qr/${encodeURIComponent(qrCode)}`);
 
 // ══════════════════════════════════════════════════════════════
 //  CART ENDPOINTS
@@ -173,7 +179,7 @@ export const endSession = () =>
 export const scanBarcode = (barcode) =>
     apiFetch('/api/v1/cart/scan', {
         method: 'POST',
-        body: JSON.stringify({ barcode}),
+        body: JSON.stringify({ barcode }),
     });
 
 /** Get current cart */
