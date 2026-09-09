@@ -20,6 +20,8 @@ import PaymentScreen         from '../screens/Payment/PaymentScreen';
 import OnlineCheckoutScreen  from '../screens/Payment/OnlineCheckoutScreen';
 import PaymentQrScreen       from '../screens/Payment/PaymentQrScreen';
 import HistoryScreen         from '../screens/History/HistoryScreen';
+import ScanHistoryScreen from '../screens/History/ScanHistoryScreen';
+
 import ReceiptScreen         from '../screens/History/ReceiptScreen';
 
 const Stack = createNativeStackNavigator();
@@ -79,6 +81,11 @@ function AppStack() {
             <Stack.Screen name="StoreDiscovery" component={StoreDiscoveryScreen} />
             <Stack.Screen name="StoreHome"      component={StoreHomeScreen} />
             <Stack.Screen name="Cart"           component={CartScreen} />
+            <Stack.Screen
+                name="ScanHistory"
+                component={ScanHistoryScreen}
+                options={{ headerShown: false }}
+            />
             <Stack.Screen name="History"        component={HistoryScreen} />
             <Stack.Screen name="Receipt"        component={ReceiptScreen} />
             <Stack.Screen name="Scanner"        component={ScannerScreen} />

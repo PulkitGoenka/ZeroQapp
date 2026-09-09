@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import { Feather as Icon } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
     getBrands, findStoresByPincode, findStoresByState, findStoresByDistrict,
     findStoreByQr, startSession, endSession,
@@ -24,6 +25,8 @@ const PLACEHOLDER = '#9CA3AF';
 const BORDER = '#E5E7EB';
 const RED_SOFT = '#FEE2E2';
 const RED = '#EF4444';
+const SUCCESS = '#059669';
+const SUCCESS_SOFT = '#ECFDF5';
 
 const BRAND_TINTS = ['#4E989E', '#3F7276', '#6BAAAF', '#2E5457', '#5C9FA4', '#457D81'];
 const TABS = ['Pincode', 'District', 'State'];
@@ -234,267 +237,320 @@ export default function StoreDiscoveryScreen({ navigation }) {
     };
 
     return (
-        <KeyboardAvoidingView
-            style={styles.flex}
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        >
+        <SafeAreaView style={styles.flex} edges={['top', 'bottom']}>
             <StatusBar barStyle="dark-content" backgroundColor={BG} />
-
-            {/* Header */}
-            <View style={styles.header}>
-                <TouchableOpacity onPress={handleBack} style={styles.backBtn} activeOpacity={0.7}>
-                    <Icon name="arrow-left" size={20} color={INK} />
-                </TouchableOpacity>
-                <View style={{ alignItems: 'center' }}>
-                    <Text style={styles.headerTitle}>Select Store</Text>
-                    <Text style={styles.headerSub}>Scan entrance QR or pick location</Text>
-                </View>
-                <View style={{ width: 36 }} />
-            </View>
-
-            <ScrollView
-                ref={scrollRef}
-                contentContainerStyle={styles.scroll}
-                keyboardShouldPersistTaps="handled"
-                keyboardDismissMode="on-drag"
-                showsVerticalScrollIndicator={false}
+            <KeyboardAvoidingView
+                style={styles.flex}
+                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             >
-                {/* QR Card */}
-                <View style={styles.qrCard}>
-                    <View style={styles.qrCardRow}>
-                        <View style={styles.qrIcon}><Icon name="maximize" size={26} color={TEAL} /></View>
-                        <View style={{ flex: 1 }}>
-                            <Text style={styles.qrTitle}>Instant Store Check-In</Text>
-                            <Text style={styles.qrSub}>Scan the entrance QR code to start scanning items directly</Text>
-                        </View>
-                    </View>
-                    <TouchableOpacity style={styles.scanBtn} onPress={openQr} activeOpacity={0.85}>
-                        <Icon name="camera" size={16} color={GOLD_TEXT} />
-                        <Text style={styles.scanBtnText}>Open Scanner</Text>
+                {/* Header */}
+                <View style={styles.header}>
+                    <TouchableOpacity onPress={handleBack} style={styles.backBtn} activeOpacity={0.7}>
+                        <Icon name="arrow-left" size={20} color={INK} />
                     </TouchableOpacity>
-                </View>
-
-                {/* Divider */}
-                <View style={styles.divRow}>
-                    <View style={styles.divLine} />
-                    <Text style={styles.divText}>OR CHOOSE A STORE</Text>
-                    <View style={styles.divLine} />
-                </View>
-
-                {/* Brand row */}
-                <View style={styles.rowBetween}>
-                    <Text style={styles.sectionLabel}>Select a brand</Text>
-                    <Text style={styles.countLabel}>{brands.length} available</Text>
-                </View>
-
-                {loadingBrands ? (
-                    <ActivityIndicator size="small" color={TEAL} style={{ marginVertical: 20 }} />
-                ) : brands.length === 0 ? (
-                    <View style={styles.emptyBrands}>
-                        <Icon name="alert-circle" size={28} color="#D1D5DB" />
-                        <Text style={styles.emptyText}>No brands available</Text>
-                        <TouchableOpacity style={styles.retryBtn} onPress={loadBrands}>
-                            <Text style={styles.retryText}>Retry</Text>
-                        </TouchableOpacity>
+                    <View style={{ alignItems: 'center' }}>
+                        <Text style={styles.headerTitle}>Select Store</Text>
+                        <Text style={styles.headerSub}>Scan entrance QR or pick location</Text>
                     </View>
-                ) : (
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.brandRow}>
-                        {brands.map((b, index) => {
-                            const isSelected = selectedBrand?.id === b.id;
-                            const tint = BRAND_TINTS[index % BRAND_TINTS.length];
-                            return (
+
+                    {/* Right Header Button: Direct Scan History */}
+                    {session ? (
+                        <TouchableOpacity
+                            onPress={() => navigation.navigate('ScanHistory')}
+                            style={styles.scanHistoryHeaderBtn}
+                            activeOpacity={0.8}
+                        >
+                            <Icon name="clock" size={18} color={TEAL} />
+                        </TouchableOpacity>
+                    ) : (
+                        <View style={{ width: 36 }} />
+                    )}
+                </View>
+
+                <ScrollView
+                    ref={scrollRef}
+                    contentContainerStyle={styles.scroll}
+                    keyboardShouldPersistTaps="handled"
+                    keyboardDismissMode="on-drag"
+                    showsVerticalScrollIndicator={false}
+                >
+                    {/* Active Session Card */}
+                    {session && (
+                        <View style={styles.activeSessionCard}>
+                            <View style={styles.activeTopRow}>
+                                <View style={styles.activeStoreIcon}>
+                                    <Icon name="map-pin" size={18} color={SUCCESS} />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <View style={styles.activeBadgeRow}>
+                                        <Text style={styles.activeBadge}>● ACTIVE</Text>
+                                    </View>
+                                    <Text style={styles.activeStoreName} numberOfLines={1}>
+                                        {session.storeName || 'Current Store'}
+                                    </Text>
+                                </View>
+                            </View>
+
+                            {/* Buttons: Scan History & Resume Session */}
+                            <View style={styles.sessionBtnRow}>
                                 <TouchableOpacity
-                                    key={b.id}
-                                    style={[styles.brandCard, isSelected && { borderColor: TEAL }]}
-                                    onPress={() => selectBrand(b)}
+                                    style={styles.scanHistoryBtn}
+                                    onPress={() => navigation.navigate('ScanHistory')}
+                                    activeOpacity={0.8}
+                                >
+                                    <Icon name="clock" size={14} color={TEAL} />
+                                    <Text style={styles.scanHistoryText}>Scan History</Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                    style={styles.resumeBtn}
+                                    onPress={() => navigation.navigate('StoreHome')}
                                     activeOpacity={0.85}
                                 >
-                                    <View style={[styles.brandTop, { backgroundColor: tint }]}>
-                                        <Icon name="shopping-bag" size={24} color="#fff" />
-                                        {isSelected && (
-                                            <View style={styles.checkBadge}>
-                                                <Icon name="check" size={12} color={TEAL} />
-                                            </View>
-                                        )}
-                                    </View>
-                                    <View style={styles.brandBody}>
-                                        <Text style={styles.brandName} numberOfLines={1}>{b.name}</Text>
-                                        <Text style={styles.brandDesc} numberOfLines={1}>{b.description || 'Tap to find a store'}</Text>
-                                    </View>
+                                    <Text style={styles.resumeBtnText}>Resume Cart</Text>
+                                    <Icon name="arrow-right" size={13} color="#FFFFFF" />
                                 </TouchableOpacity>
-                            );
-                        })}
-                    </ScrollView>
-                )}
-
-                {/* Manual Finder */}
-                {selectedBrand && (
-                    <View
-                        style={styles.finder}
-                        onLayout={(e) => { finderY.current = e.nativeEvent.layout.y; }}
-                    >
-                        <View style={styles.rowBetween}>
-                            <View>
-                                <Text style={styles.sectionLabel}>Find {selectedBrand.name} near you</Text>
-                                <Text style={styles.finderSub}>Search by pincode, district or state</Text>
                             </View>
-                            <TouchableOpacity onPress={clearBrand} style={styles.clearBtn}>
-                                <Icon name="x" size={12} color={MUTED} />
-                                <Text style={styles.clearText}>Clear</Text>
+                        </View>
+                    )}
+
+                    {/* QR Entrance Card */}
+                    <View style={styles.qrCard}>
+                        <View style={styles.qrCardRow}>
+                            <View style={styles.qrIcon}><Icon name="maximize" size={26} color={TEAL} /></View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.qrTitle}>Instant Store Check-In</Text>
+                                <Text style={styles.qrSub}>Scan the entrance QR code to start scanning items directly</Text>
+                            </View>
+                        </View>
+                        <TouchableOpacity style={styles.scanBtn} onPress={openQr} activeOpacity={0.85}>
+                            <Icon name="camera" size={16} color={GOLD_TEXT} />
+                            <Text style={styles.scanBtnText}>Open Scanner</Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    {/* Divider */}
+                    <View style={styles.divRow}>
+                        <View style={styles.divLine} />
+                        <Text style={styles.divText}>OR CHOOSE A STORE</Text>
+                        <View style={styles.divLine} />
+                    </View>
+
+                    {/* Brand row */}
+                    <View style={styles.rowBetween}>
+                        <Text style={styles.sectionLabel}>Select a brand</Text>
+                        <Text style={styles.countLabel}>{brands.length} available</Text>
+                    </View>
+
+                    {loadingBrands ? (
+                        <ActivityIndicator size="small" color={TEAL} style={{ marginVertical: 20 }} />
+                    ) : brands.length === 0 ? (
+                        <View style={styles.emptyBrands}>
+                            <Icon name="alert-circle" size={28} color="#D1D5DB" />
+                            <Text style={styles.emptyText}>No brands available</Text>
+                            <TouchableOpacity style={styles.retryBtn} onPress={loadBrands}>
+                                <Text style={styles.retryText}>Retry</Text>
                             </TouchableOpacity>
                         </View>
-
-                        <View style={styles.tabs}>
-                            {TABS.map((t, i) => (
-                                <TouchableOpacity
-                                    key={t}
-                                    onPress={() => {
-                                        setTab(i);
-                                        setStores([]);
-                                        setHasSearched(false);
-                                    }}
-                                    style={[styles.tab, tab === i && styles.tabActive]}
-                                >
-                                    <Text style={[styles.tabText, tab === i && styles.tabTextActive]}>{t}</Text>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
-
-                        <TextInput
-                            style={styles.input}
-                            placeholder={tab === 0 ? 'e.g. 201014 (6-digit pincode)' : tab === 1 ? 'e.g. Ghaziabad' : 'e.g. Uttar Pradesh'}
-                            placeholderTextColor={PLACEHOLDER}
-                            keyboardType={tab === 0 ? 'number-pad' : 'default'}
-                            maxLength={tab === 0 ? 6 : undefined}
-                            value={val}
-                            onChangeText={setVal}
-                            autoCapitalize={tab === 0 ? 'none' : 'words'}
-                            onFocus={() => {
-                                setTimeout(() => {
-                                    scrollRef.current?.scrollTo({ y: finderY.current - 10, animated: true });
-                                }, 200);
-                            }}
-                        />
-
-                        <TouchableOpacity
-                            style={[styles.searchBtn, (!val.trim() || searching) && styles.btnOff]}
-                            onPress={search}
-                            disabled={!val.trim() || searching}
-                        >
-                            {searching ? (
-                                <ActivityIndicator color="#fff" />
-                            ) : (
-                                <>
-                                    <Icon name="search" size={16} color="#fff" />
-                                    <Text style={styles.searchBtnText}>Find Stores</Text>
-                                </>
-                            )}
-                        </TouchableOpacity>
-
-                        {/* Results */}
-                        {stores.length > 0 && (
-                            <>
-                                <Text style={styles.resultsLabel}>{stores.length} store{stores.length > 1 ? 's' : ''} found</Text>
-                                {stores.map((s) => (
-                                    <TouchableOpacity key={s.id} style={styles.storeCard} onPress={() => enterStore(s)} disabled={starting === s.id}>
-                                        <View style={styles.storeLogo}><Text style={styles.storeLogoText}>{s.brandName?.charAt(0) || selectedBrand.name.charAt(0)}</Text></View>
-                                        <View style={{ flex: 1 }}>
-                                            <Text style={styles.storeName}>{s.name}</Text>
-                                            <Text style={styles.storeAddr} numberOfLines={1}>{s.address}, {s.city}</Text>
-                                            <Text style={styles.storeMeta}>{s.pincode} · {s.district} · {s.state}</Text>
+                    ) : (
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.brandRow}>
+                            {brands.map((b, index) => {
+                                const isSelected = selectedBrand?.id === b.id;
+                                const tint = BRAND_TINTS[index % BRAND_TINTS.length];
+                                return (
+                                    <TouchableOpacity
+                                        key={b.id}
+                                        style={[styles.brandCard, isSelected && { borderColor: TEAL }]}
+                                        onPress={() => selectBrand(b)}
+                                        activeOpacity={0.85}
+                                    >
+                                        <View style={[styles.brandTop, { backgroundColor: tint }]}>
+                                            <Icon name="shopping-bag" size={24} color="#fff" />
+                                            {isSelected && (
+                                                <View style={styles.checkBadge}>
+                                                    <Icon name="check" size={12} color={TEAL} />
+                                                </View>
+                                            )}
                                         </View>
-                                        {starting === s.id ? (
-                                            <ActivityIndicator color={TEAL} />
-                                        ) : (
-                                            <View style={styles.enterBtn}><Text style={styles.enterText}>Enter</Text></View>
-                                        )}
+                                        <View style={styles.brandBody}>
+                                            <Text style={styles.brandName} numberOfLines={1}>{b.name}</Text>
+                                            <Text style={styles.brandDesc} numberOfLines={1}>{b.description || 'Tap to find a store'}</Text>
+                                        </View>
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </ScrollView>
+                    )}
+
+                    {/* Manual Finder */}
+                    {selectedBrand && (
+                        <View
+                            style={styles.finder}
+                            onLayout={(e) => { finderY.current = e.nativeEvent.layout.y; }}
+                        >
+                            <View style={styles.rowBetween}>
+                                <View>
+                                    <Text style={styles.sectionLabel}>Find {selectedBrand.name} near you</Text>
+                                    <Text style={styles.finderSub}>Search by pincode, district or state</Text>
+                                </View>
+                                <TouchableOpacity onPress={clearBrand} style={styles.clearBtn}>
+                                    <Icon name="x" size={12} color={MUTED} />
+                                    <Text style={styles.clearText}>Clear</Text>
+                                </TouchableOpacity>
+                            </View>
+
+                            <View style={styles.tabs}>
+                                {TABS.map((t, i) => (
+                                    <TouchableOpacity
+                                        key={t}
+                                        onPress={() => {
+                                            setTab(i);
+                                            setStores([]);
+                                            setHasSearched(false);
+                                        }}
+                                        style={[styles.tab, tab === i && styles.tabActive]}
+                                    >
+                                        <Text style={[styles.tabText, tab === i && styles.tabTextActive]}>{t}</Text>
                                     </TouchableOpacity>
                                 ))}
-                            </>
-                        )}
-
-                        {hasSearched && !searching && stores.length === 0 && (
-                            <View style={styles.noResults}>
-                                <Icon name="map-pin" size={22} color={MUTED} />
-                                <Text style={styles.noResultsTitle}>No Stores Found</Text>
-                                <Text style={styles.noResultsSub}>
-                                    No {selectedBrand.name} stores match your search in this area. Try another {TABS[tab].toLowerCase()}.
-                                </Text>
                             </View>
-                        )}
-                    </View>
-                )}
-            </ScrollView>
 
-            {/* Custom Styled Confirmation & Alert Modal */}
-            <Modal
-                visible={dialogState.visible}
-                transparent
-                animationType="fade"
-                onRequestClose={() => setDialogState(prev => ({ ...prev, visible: false }))}
-            >
-                <View style={styles.modalBackdrop}>
-                    <View style={styles.dialogCard}>
-                        <View style={[styles.dialogIconWrap, !dialogState.isDestructive && { backgroundColor: TEAL_SOFT }]}>
-                            <Icon
-                                name={dialogState.isDestructive ? 'alert-triangle' : 'info'}
-                                size={24}
-                                color={dialogState.isDestructive ? RED : TEAL}
+                            <TextInput
+                                style={styles.input}
+                                placeholder={tab === 0 ? 'e.g. 600096 (6-digit pincode)' : tab === 1 ? 'e.g. Chennai' : 'e.g. Tamil Nadu'}
+                                placeholderTextColor={PLACEHOLDER}
+                                keyboardType={tab === 0 ? 'number-pad' : 'default'}
+                                maxLength={tab === 0 ? 6 : undefined}
+                                value={val}
+                                onChangeText={setVal}
+                                autoCapitalize={tab === 0 ? 'none' : 'words'}
+                                onFocus={() => {
+                                    setTimeout(() => {
+                                        scrollRef.current?.scrollTo({ y: finderY.current - 10, animated: true });
+                                    }, 200);
+                                }}
                             />
-                        </View>
-                        <Text style={styles.dialogTitle}>{dialogState.title}</Text>
-                        <Text style={styles.dialogBody}>{dialogState.message}</Text>
-                        <View style={styles.dialogActions}>
-                            {dialogState.isDestructive && (
-                                <TouchableOpacity
-                                    style={styles.dialogCancelBtn}
-                                    onPress={() => setDialogState(prev => ({ ...prev, visible: false }))}
-                                    disabled={endingSession}
-                                >
-                                    <Text style={styles.dialogCancelText}>Cancel</Text>
-                                </TouchableOpacity>
-                            )}
+
                             <TouchableOpacity
-                                style={[styles.dialogDestructBtn, !dialogState.isDestructive && { backgroundColor: TEAL }]}
-                                onPress={dialogState.onConfirm}
-                                disabled={endingSession}
+                                style={[styles.searchBtn, (!val.trim() || searching) && styles.btnOff]}
+                                onPress={search}
+                                disabled={!val.trim() || searching}
                             >
-                                {endingSession ? (
-                                    <ActivityIndicator size="small" color="#fff" />
+                                {searching ? (
+                                    <ActivityIndicator color="#fff" />
                                 ) : (
-                                    <Text style={styles.dialogDestructText}>{dialogState.confirmText || 'OK'}</Text>
+                                    <>
+                                        <Icon name="search" size={16} color="#fff" />
+                                        <Text style={styles.searchBtnText}>Find Stores</Text>
+                                    </>
                                 )}
                             </TouchableOpacity>
-                        </View>
-                    </View>
-                </View>
-            </Modal>
 
-            {/* QR Scanner Camera Modal */}
-            <Modal visible={qrOpen} animationType="slide" onRequestClose={() => setQrOpen(false)}>
-                <View style={{ flex: 1, backgroundColor: '#000' }}>
-                    <View style={styles.qrModalHeader}>
-                        <TouchableOpacity onPress={() => setQrOpen(false)} style={styles.qrClose}>
-                            <Icon name="x" size={22} color="#fff" />
-                        </TouchableOpacity>
-                        <Text style={styles.qrModalTitle}>Scan Store QR</Text>
-                        <View style={{ width: 36 }} />
-                    </View>
-                    <CameraView
-                        style={StyleSheet.absoluteFill}
-                        facing="back"
-                        barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
-                        onBarcodeScanned={qrScanned ? undefined : handleQrScanned}
-                    />
-                    <View style={styles.qrOverlay}>
-                        <View style={styles.qrFrame}>
-                            {[styles.cTL, styles.cTR, styles.cBL, styles.cBR].map((c, i) => <View key={i} style={[styles.corner, c]} />)}
+                            {/* Results */}
+                            {stores.length > 0 && (
+                                <>
+                                    <Text style={styles.resultsLabel}>{stores.length} store{stores.length > 1 ? 's' : ''} found</Text>
+                                    {stores.map((s) => (
+                                        <TouchableOpacity key={s.id} style={styles.storeCard} onPress={() => enterStore(s)} disabled={starting === s.id}>
+                                            <View style={styles.storeLogo}><Text style={styles.storeLogoText}>{s.brandName?.charAt(0) || selectedBrand.name.charAt(0)}</Text></View>
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={styles.storeName}>{s.name}</Text>
+                                                <Text style={styles.storeAddr} numberOfLines={1}>{s.address}, {s.city}</Text>
+                                                <Text style={styles.storeMeta}>{s.pincode} · {s.district} · {s.state}</Text>
+                                            </View>
+                                            {starting === s.id ? (
+                                                <ActivityIndicator color={TEAL} />
+                                            ) : (
+                                                <View style={styles.enterBtn}><Text style={styles.enterText}>Enter</Text></View>
+                                            )}
+                                        </TouchableOpacity>
+                                    ))}
+                                </>
+                            )}
+
+                            {hasSearched && !searching && stores.length === 0 && (
+                                <View style={styles.noResults}>
+                                    <Icon name="map-pin" size={22} color={MUTED} />
+                                    <Text style={styles.noResultsTitle}>No Stores Found</Text>
+                                    <Text style={styles.noResultsSub}>
+                                        No {selectedBrand.name} stores match your search in this area. Try another {TABS[tab].toLowerCase()}.
+                                    </Text>
+                                </View>
+                            )}
                         </View>
-                        <Text style={styles.qrHint}>Point at store entrance QR</Text>
+                    )}
+                </ScrollView>
+
+                {/* Session Switch Confirmation Modal */}
+                <Modal
+                    visible={dialogState.visible}
+                    transparent
+                    animationType="fade"
+                    onRequestClose={() => setDialogState(prev => ({ ...prev, visible: false }))}
+                >
+                    <View style={styles.modalBackdrop}>
+                        <View style={styles.dialogCard}>
+                            <View style={[styles.dialogIconWrap, !dialogState.isDestructive && { backgroundColor: TEAL_SOFT }]}>
+                                <Icon
+                                    name={dialogState.isDestructive ? 'alert-triangle' : 'info'}
+                                    size={24}
+                                    color={dialogState.isDestructive ? RED : TEAL}
+                                />
+                            </View>
+                            <Text style={styles.dialogTitle}>{dialogState.title}</Text>
+                            <Text style={styles.dialogBody}>{dialogState.message}</Text>
+                            <View style={styles.dialogActions}>
+                                {dialogState.isDestructive && (
+                                    <TouchableOpacity
+                                        style={styles.dialogCancelBtn}
+                                        onPress={() => setDialogState(prev => ({ ...prev, visible: false }))}
+                                        disabled={endingSession}
+                                    >
+                                        <Text style={styles.dialogCancelText}>Cancel</Text>
+                                    </TouchableOpacity>
+                                )}
+                                <TouchableOpacity
+                                    style={[styles.dialogDestructBtn, !dialogState.isDestructive && { backgroundColor: TEAL }]}
+                                    onPress={dialogState.onConfirm}
+                                    disabled={endingSession}
+                                >
+                                    {endingSession ? (
+                                        <ActivityIndicator size="small" color="#fff" />
+                                    ) : (
+                                        <Text style={styles.dialogDestructText}>{dialogState.confirmText || 'OK'}</Text>
+                                    )}
+                                </TouchableOpacity>
+                            </View>
+                        </View>
                     </View>
-                </View>
-            </Modal>
-        </KeyboardAvoidingView>
+                </Modal>
+
+                {/* Entrance QR Scanner Modal */}
+                <Modal visible={qrOpen} animationType="slide" onRequestClose={() => setQrOpen(false)}>
+                    <View style={{ flex: 1, backgroundColor: '#000' }}>
+                        <View style={styles.qrModalHeader}>
+                            <TouchableOpacity onPress={() => setQrOpen(false)} style={styles.qrClose}>
+                                <Icon name="x" size={22} color="#fff" />
+                            </TouchableOpacity>
+                            <Text style={styles.qrModalTitle}>Scan Store QR</Text>
+                            <View style={{ width: 36 }} />
+                        </View>
+                        <CameraView
+                            style={StyleSheet.absoluteFill}
+                            facing="back"
+                            barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+                            onBarcodeScanned={qrScanned ? undefined : handleQrScanned}
+                        />
+                        <View style={styles.qrOverlay}>
+                            <View style={styles.qrFrame}>
+                                {[styles.cTL, styles.cTR, styles.cBL, styles.cBR].map((c, i) => <View key={i} style={[styles.corner, c]} />)}
+                            </View>
+                            <Text style={styles.qrHint}>Point at store entrance QR</Text>
+                        </View>
+                    </View>
+                </Modal>
+            </KeyboardAvoidingView>
+        </SafeAreaView>
     );
 }
 
@@ -503,14 +559,72 @@ const styles = StyleSheet.create({
     flex: { flex: 1, backgroundColor: BG },
     header: {
         flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-        paddingHorizontal: 16, paddingTop: 52, paddingBottom: 16, backgroundColor: BG,
+        paddingHorizontal: 16, paddingTop: 10, paddingBottom: 16, backgroundColor: BG,
     },
     backBtn: { width: 36, height: 36, justifyContent: 'center', alignItems: 'center' },
+    scanHistoryHeaderBtn: {
+        width: 36,
+        height: 36,
+        borderRadius: 10,
+        backgroundColor: TEAL_SOFT,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
     headerTitle: { fontSize: 18, fontWeight: '800', color: INK },
     headerSub: { fontSize: 12, color: MUTED, marginTop: 2, fontWeight: '500' },
-    scroll: { paddingHorizontal: 20, paddingBottom: 100 },
+    scroll: { paddingHorizontal: 20, paddingBottom: 40 },
 
-    qrCard: { backgroundColor: TEAL, borderRadius: 20, padding: 20, marginTop: 6, shadowColor: TEAL_SHADOW, shadowOpacity: 0.25, shadowRadius: 14, elevation: 5 },
+    activeSessionCard: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 16,
+        padding: 14,
+        marginBottom: 16,
+        borderWidth: 1.5,
+        borderColor: SUCCESS,
+        shadowColor: SUCCESS,
+        shadowOpacity: 0.12,
+        shadowRadius: 8,
+        elevation: 3,
+        gap: 12,
+    },
+    activeTopRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    activeStoreIcon: {
+        width: 38,
+        height: 38,
+        borderRadius: 10,
+        backgroundColor: SUCCESS_SOFT,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    activeBadgeRow: { flexDirection: 'row', alignItems: 'center' },
+    activeBadge: { fontSize: 10, fontWeight: '800', color: SUCCESS, letterSpacing: 0.5 },
+    activeStoreName: { fontSize: 14, fontWeight: '800', color: INK, marginTop: 2 },
+
+    sessionBtnRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    scanHistoryBtn: {
+        flex: 1,
+        backgroundColor: TEAL_SOFT,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        paddingVertical: 10,
+        borderRadius: 10,
+    },
+    scanHistoryText: { color: TEAL, fontSize: 12, fontWeight: '700' },
+    resumeBtn: {
+        flex: 1,
+        backgroundColor: SUCCESS,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        paddingVertical: 10,
+        borderRadius: 10,
+    },
+    resumeBtnText: { color: '#FFFFFF', fontSize: 12, fontWeight: '700' },
+
+    qrCard: { backgroundColor: TEAL, borderRadius: 20, padding: 20, marginTop: 4, shadowColor: TEAL_SHADOW, shadowOpacity: 0.25, shadowRadius: 14, elevation: 5 },
     qrCardRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
     qrIcon: { width: 48, height: 48, borderRadius: 14, backgroundColor: TEAL_SOFT, justifyContent: 'center', alignItems: 'center' },
     qrTitle: { fontSize: 16, fontWeight: '800', color: '#fff' },
@@ -580,7 +694,7 @@ const styles = StyleSheet.create({
     dialogDestructBtn: { flex: 1, paddingVertical: 12, borderRadius: 12, backgroundColor: RED, alignItems: 'center', justifyContent: 'center' },
     dialogDestructText: { fontSize: 13, fontWeight: '700', color: '#fff' },
 
-    qrModalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 52, paddingBottom: 16, zIndex: 10 },
+    qrModalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 16, paddingBottom: 16, zIndex: 10 },
     qrClose: { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
     qrModalTitle: { fontSize: 16, fontWeight: '700', color: '#fff' },
     qrOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center' },

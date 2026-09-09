@@ -10,10 +10,14 @@ import {
   StatusBar,
 } from 'react-native';
 import { Feather as Icon } from '@expo/vector-icons';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAuth } from '../../store/AuthContext';
 import { getPaymentHistory } from '../../services/api';
 
 const TEAL = '#4E989E';
 const TEAL_SOFT = '#EAF5F5';
+const GOLD = '#F7B32B';
+const GOLD_TEXT = '#412402';
 const BG = '#F5FAFA';
 const INK = '#111827';
 const MUTED = '#6B7280';
@@ -34,25 +38,19 @@ const fmtDate = (iso) => {
   );
 };
 
-export default function HistoryScreen({ navigation }) {
+export default function HomeScreen({ navigation }) {
+  const { session, user } = useAuth();
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [page, setPage] = useState(0);
-  const [hasMore, setHasMore] = useState(true);
 
-  const fetchHistory = useCallback(async (pg = 0, refresh = false) => {
+  const fetchTransactions = useCallback(async () => {
     try {
-      const res = await getPaymentHistory(pg, 20);
-      const newItems = res?.data || [];
-      if (refresh || pg === 0) {
-        setHistory(newItems);
-      } else {
-        setHistory((prev) => [...prev, ...newItems]);
-      }
-      setHasMore(newItems.length === 20);
+      const res = await getPaymentHistory(0, 10);
+      const list = res?.data?.content || res?.data || (Array.isArray(res) ? res : []);
+      setHistory(list);
     } catch (e) {
-      console.log('Payment history error:', e.message);
+      console.log('Transaction history error:', e.message);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -60,73 +58,147 @@ export default function HistoryScreen({ navigation }) {
   }, []);
 
   useEffect(() => {
-    fetchHistory(0);
-  }, [fetchHistory]);
+    fetchTransactions();
+    const unsub = navigation.addListener('focus', fetchTransactions);
+    return unsub;
+  }, [navigation, fetchTransactions]);
 
-  const loadMore = () => {
-    if (!hasMore || loading) return;
-    const nextPage = page + 1;
-    setPage(nextPage);
-    fetchHistory(nextPage);
-  };
-
-  if (loading && page === 0) {
-    return (
-        <View style={[styles.flex, styles.center]}>
-          <ActivityIndicator size="large" color={TEAL} />
+  const renderHeader = () => (
+      <View style={styles.topContainer}>
+        {/* User Greeting */}
+        <View style={styles.userRow}>
+          <View>
+            <Text style={styles.greetSub}>Welcome back,</Text>
+            <Text style={styles.greetName}>{user?.name || 'Shopper'}</Text>
+          </View>
+          <TouchableOpacity
+              style={styles.profileBtn}
+              onPress={() => navigation.navigate('Profile')}
+              activeOpacity={0.8}
+          >
+            <Icon name="user" size={18} color={TEAL} />
+          </TouchableOpacity>
         </View>
-    );
-  }
+
+        {/* 1. Active Store Session Card (Agar koi session chal raha ho) */}
+        {session ? (
+            <View style={styles.activeSessionCard}>
+              <View style={styles.activeCardHeader}>
+                <View style={styles.activeTag}>
+                  <Text style={styles.activeTagText}>● SHOPPING IN PROGRESS</Text>
+                </View>
+                <TouchableOpacity
+                    onPress={() => navigation.navigate('Cart')}
+                    style={styles.cartIconBtn}
+                >
+                  <Icon name="shopping-cart" size={16} color={SUCCESS} />
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.activeStoreName} numberOfLines={1}>
+                {session.storeName || 'Active Store'}
+              </Text>
+              <Text style={styles.activeStoreSub}>Your cart is open. Tap resume to keep scanning items.</Text>
+
+              <View style={styles.activeActionRow}>
+                <TouchableOpacity
+                    style={styles.resumeBtn}
+                    onPress={() => navigation.navigate('StoreHome')}
+                    activeOpacity={0.85}
+                >
+                  <Text style={styles.resumeBtnText}>Resume Session</Text>
+                  <Icon name="arrow-right" size={15} color="#FFFFFF" />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    style={styles.scanQuickBtn}
+                    onPress={() => navigation.navigate('Scanner')}
+                    activeOpacity={0.85}
+                >
+                  <Icon name="camera" size={16} color={TEAL} />
+                </TouchableOpacity>
+              </View>
+            </View>
+        ) : (
+            /* 2. New Store Check-In Prompt */
+            <View style={styles.newStoreCard}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.newStoreTitle}>Ready to Shop?</Text>
+                <Text style={styles.newStoreSub}>Locate a branch or scan the entrance QR tag to start.</Text>
+              </View>
+              <TouchableOpacity
+                  style={styles.findStoreBtn}
+                  onPress={() => navigation.navigate('StoreDiscovery')}
+                  activeOpacity={0.85}
+              >
+                <Icon name="map-pin" size={15} color={GOLD_TEXT} />
+                <Text style={styles.findStoreText}>Enter Store</Text>
+              </TouchableOpacity>
+            </View>
+        )}
+
+        {/* Quick Navigation Pills */}
+        <View style={styles.quickActions}>
+          <TouchableOpacity
+              style={styles.actionPill}
+              onPress={() => navigation.navigate('StoreDiscovery')}
+          >
+            <Icon name="search" size={16} color={TEAL} />
+            <Text style={styles.actionPillText}>Browse Stores</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+              style={styles.actionPill}
+              onPress={() => navigation.navigate('Cart')}
+          >
+            <Icon name="shopping-bag" size={16} color={TEAL} />
+            <Text style={styles.actionPillText}>Active Cart</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Transaction History Section Header */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Recent Invoices & Transactions</Text>
+          <Text style={styles.sectionCount}>{history.length} Paid</Text>
+        </View>
+      </View>
+  );
 
   return (
-      <View style={styles.flex}>
-        <StatusBar barStyle="dark-content" backgroundColor={CARD_BG} />
+      <SafeAreaView style={styles.flex} edges={['top', 'bottom']}>
+        <StatusBar barStyle="dark-content" backgroundColor={BG} />
 
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity
-              onPress={() => navigation.goBack()}
-              style={styles.backBtn}
-              activeOpacity={0.7}
-          >
-            <Icon name="arrow-left" size={18} color={INK} />
-          </TouchableOpacity>
-          <View style={{ flex: 1, marginLeft: 12 }}>
-            <Text style={styles.headerTitle}>Order & Payment History</Text>
-            <Text style={styles.headerSub}>{history.length} purchases recorded</Text>
-          </View>
-        </View>
-
-        {history.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <View style={styles.emptyIconCircle}>
-                <Icon name="file-text" size={32} color={TEAL} />
-              </View>
-              <Text style={styles.emptyTitle}>No Transactions Yet</Text>
-              <Text style={styles.emptySubtitle}>
-                Completed in-store orders and payment invoices will appear here.
-              </Text>
+        {loading ? (
+            <View style={[styles.flex, styles.center]}>
+              <ActivityIndicator size="large" color={TEAL} />
             </View>
         ) : (
             <FlatList
                 data={history}
-                keyExtractor={(item) => String(item.id || item.billRef)}
+                keyExtractor={(item) => String(item.id || item.billRef || item.orderId)}
+                ListHeaderComponent={renderHeader}
                 contentContainerStyle={styles.listContent}
+                showsVerticalScrollIndicator={false}
                 refreshControl={
                   <RefreshControl
                       refreshing={refreshing}
                       onRefresh={() => {
                         setRefreshing(true);
-                        setPage(0);
-                        fetchHistory(0, true);
+                        fetchTransactions();
                       }}
                       colors={[TEAL]}
                   />
                 }
-                onEndReached={loadMore}
-                onEndReachedThreshold={0.3}
-                ListFooterComponent={
-                  hasMore ? <ActivityIndicator color={TEAL} style={{ marginVertical: 14 }} /> : null
+                ListEmptyComponent={
+                  <View style={styles.emptyContainer}>
+                    <View style={styles.emptyIconCircle}>
+                      <Icon name="file-text" size={32} color={TEAL} />
+                    </View>
+                    <Text style={styles.emptyTitle}>No Transactions Yet</Text>
+                    <Text style={styles.emptySubtitle}>
+                      Completed store checkouts, invoices, and digital receipts will be archived here.
+                    </Text>
+                  </View>
                 }
                 renderItem={({ item }) => {
                   const isOnline = (item.paymentMethod || '').toUpperCase() !== 'CASH';
@@ -145,10 +217,10 @@ export default function HistoryScreen({ navigation }) {
                                   color={isOnline ? '#2563EB' : '#D97706'}
                               />
                               <Text style={[styles.methodText, { color: isOnline ? '#2563EB' : '#D97706' }]}>
-                                {isOnline ? 'Online Payment' : 'Cash Desk'}
+                                {isOnline ? 'Online Payment' : 'Cash Counter'}
                               </Text>
                             </View>
-                            <Text style={styles.billDate}>{fmtDate(item.paidAt)}</Text>
+                            <Text style={styles.billDate}>{fmtDate(item.paidAt || item.createdAt)}</Text>
                           </View>
                           <View style={styles.statusSuccessPill}>
                             <Icon name="check" size={11} color={SUCCESS} />
@@ -165,10 +237,10 @@ export default function HistoryScreen({ navigation }) {
 
                         <View style={styles.billCardFooter}>
                           <Text style={styles.footerDetails}>
-                            {item.itemCount || (item.items ? item.items.length : 1)} Items · Ref #{item.billRef}
+                            {item.itemCount || (item.items ? item.items.length : 1)} Items · Ref #{String(item.billRef || item.orderId || '').slice(-8)}
                           </Text>
                           <View style={styles.viewReceiptLink}>
-                            <Text style={styles.viewReceiptText}>View Receipt</Text>
+                            <Text style={styles.viewReceiptText}>View Bill</Text>
                             <Icon name="chevron-right" size={14} color={TEAL} />
                           </View>
                         </View>
@@ -177,45 +249,147 @@ export default function HistoryScreen({ navigation }) {
                 }}
             />
         )}
-      </View>
+      </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: BG },
   center: { justifyContent: 'center', alignItems: 'center' },
+  listContent: { paddingHorizontal: 16, paddingBottom: 28 },
+  topContainer: { paddingTop: 10, paddingBottom: 6 },
 
-  header: {
+  userRow: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 54,
-    paddingBottom: 14,
-    backgroundColor: CARD_BG,
-    borderBottomWidth: 1,
-    borderBottomColor: BORDER,
+    marginBottom: 16,
   },
-  backBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: BG,
+  greetSub: { fontSize: 13, color: MUTED, fontWeight: '500' },
+  greetName: { fontSize: 20, fontWeight: '800', color: INK },
+  profileBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: CARD_BG,
+    borderWidth: 1,
+    borderColor: BORDER,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  headerTitle: { fontSize: 17, fontWeight: '800', color: INK },
-  headerSub: { fontSize: 12, color: MUTED, marginTop: 1 },
 
-  listContent: { padding: 18, gap: 12 },
+  activeSessionCard: {
+    backgroundColor: CARD_BG,
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1.5,
+    borderColor: SUCCESS,
+    shadowColor: SUCCESS,
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+    marginBottom: 16,
+  },
+  activeCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  activeTag: {
+    backgroundColor: SUCCESS_SOFT,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  activeTagText: { fontSize: 10, fontWeight: '800', color: SUCCESS, letterSpacing: 0.5 },
+  cartIconBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: SUCCESS_SOFT,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  activeStoreName: { fontSize: 16, fontWeight: '800', color: INK },
+  activeStoreSub: { fontSize: 12, color: MUTED, marginTop: 2, lineHeight: 17 },
+  activeActionRow: { flexDirection: 'row', gap: 10, marginTop: 14 },
+  resumeBtn: {
+    flex: 1,
+    backgroundColor: SUCCESS,
+    borderRadius: 12,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  resumeBtnText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
+  scanQuickBtn: {
+    width: 46,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: TEAL_SOFT,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  newStoreCard: {
+    backgroundColor: TEAL,
+    borderRadius: 18,
+    padding: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 12,
+  },
+  newStoreTitle: { fontSize: 16, fontWeight: '800', color: '#FFFFFF' },
+  newStoreSub: { fontSize: 12, color: 'rgba(255,255,255,0.85)', marginTop: 2 },
+  findStoreBtn: {
+    backgroundColor: GOLD,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  findStoreText: { color: GOLD_TEXT, fontSize: 12, fontWeight: '800' },
+
+  quickActions: { flexDirection: 'row', gap: 10, marginBottom: 20 },
+  actionPill: {
+    flex: 1,
+    backgroundColor: CARD_BG,
+    borderRadius: 12,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  actionPillText: { fontSize: 12, fontWeight: '700', color: INK },
+
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  sectionTitle: { fontSize: 14, fontWeight: '800', color: INK },
+  sectionCount: { fontSize: 12, color: MUTED, fontWeight: '600' },
+
   billCard: {
     backgroundColor: CARD_BG,
     borderRadius: 16,
-    padding: 16,
+    padding: 15,
     borderWidth: 1,
     borderColor: BORDER,
+    marginBottom: 10,
     shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
+    shadowOpacity: 0.03,
+    shadowRadius: 5,
     elevation: 1,
   },
   billCardHeader: {
@@ -270,20 +444,19 @@ const styles = StyleSheet.create({
   viewReceiptText: { fontSize: 12, fontWeight: '700', color: TEAL },
 
   emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
+    paddingVertical: 40,
     alignItems: 'center',
-    paddingHorizontal: 32,
+    justifyContent: 'center',
   },
   emptyIconCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 20,
+    width: 58,
+    height: 58,
+    borderRadius: 18,
     backgroundColor: TEAL_SOFT,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: 12,
   },
-  emptyTitle: { fontSize: 16, fontWeight: '800', color: INK, marginBottom: 4 },
-  emptySubtitle: { fontSize: 13, color: MUTED, textAlign: 'center', lineHeight: 18 },
+  emptyTitle: { fontSize: 15, fontWeight: '800', color: INK, marginBottom: 4 },
+  emptySubtitle: { fontSize: 12, color: MUTED, textAlign: 'center', lineHeight: 18, paddingHorizontal: 20 },
 });

@@ -10,6 +10,7 @@ import {
   Modal,
 } from 'react-native';
 import { Feather as Icon } from '@expo/vector-icons';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../store/AuthContext';
 import { getCart, updateQuantity, removeItem, endSession } from '../../services/api';
 
@@ -29,6 +30,7 @@ const SUCCESS = '#059669';
 const SUCCESS_SOFT = '#ECFDF5';
 
 export default function CartScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
   const { session, clearSession } = useAuth();
   const [cart, setCart] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -84,7 +86,7 @@ export default function CartScreen({ navigation }) {
   // State A: User is not checked into any store
   if (!session) {
     return (
-        <View style={styles.flex}>
+        <SafeAreaView style={styles.flex} edges={['top', 'bottom']}>
           <StatusBar barStyle="dark-content" backgroundColor={BG} />
           <View style={styles.emptyContainer}>
             <View style={styles.emptyIconBadge}>
@@ -103,15 +105,15 @@ export default function CartScreen({ navigation }) {
               <Text style={styles.actionButtonText}>Select Brand & Store</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </SafeAreaView>
     );
   }
 
   if (loading) {
     return (
-        <View style={[styles.flex, styles.center]}>
+        <SafeAreaView style={[styles.flex, styles.center]} edges={['top', 'bottom']}>
           <ActivityIndicator size="large" color={TEAL} />
-        </View>
+        </SafeAreaView>
     );
   }
 
@@ -120,7 +122,7 @@ export default function CartScreen({ navigation }) {
   const totalDiscount = cart?.totalDiscount || 0;
 
   return (
-      <View style={styles.flex}>
+      <SafeAreaView style={styles.flex} edges={['top']}>
         <StatusBar barStyle="dark-content" backgroundColor={CARD_BG} />
 
         {/* Header */}
@@ -218,8 +220,11 @@ export default function CartScreen({ navigation }) {
                   }}
               />
 
-              {/* Checkout Footer */}
-              <View style={styles.footerContainer}>
+              {/* Checkout Footer: Dynamic Bottom Padding to Prevent Gesture Bar Overlap */}
+              <View style={[
+                styles.footerContainer,
+                { paddingBottom: Math.max(insets.bottom, 16) + 6 }
+              ]}>
                 <View style={styles.billingRow}>
                   <View>
                     <Text style={styles.totalLabel}>Total Payable</Text>
@@ -287,7 +292,7 @@ export default function CartScreen({ navigation }) {
             </View>
           </View>
         </Modal>
-      </View>
+      </SafeAreaView>
   );
 }
 
@@ -299,7 +304,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 54,
+    paddingTop: 12,
     paddingBottom: 14,
     backgroundColor: CARD_BG,
     borderBottomWidth: 1,
@@ -383,8 +388,13 @@ const styles = StyleSheet.create({
     backgroundColor: CARD_BG,
     borderTopWidth: 1,
     borderTopColor: BORDER,
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingTop: 16,
     gap: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 8,
   },
   billingRow: {
     flexDirection: 'row',

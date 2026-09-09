@@ -4,11 +4,12 @@ import {
     ScrollView, Alert, StatusBar, Switch,
 } from 'react-native';
 import { Feather as Icon } from '@expo/vector-icons';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../store/AuthContext';
-import { logout } from '../../services/api';
+import { logout, endSession } from '../../services/api';
 
 export default function ProfileScreen({ navigation }) {
-    const { user, logoutUser } = useAuth();
+    const { user, logoutUser, session, clearSession } = useAuth();
     const [hideSensitive, setHideSensitive] = useState(false);
     const [darkMode, setDarkMode] = useState(false);
 
@@ -20,9 +21,7 @@ export default function ProfileScreen({ navigation }) {
         .slice(0, 2)
         .toUpperCase();
 
-    // Safe navigation handler taaki unbuilt screens par app crash na ho
     const handleNavigate = (screenName, title) => {
-        // Agar screen navigator me registered hai to navigate karega
         try {
             navigation.navigate(screenName);
         } catch {
@@ -36,14 +35,32 @@ export default function ProfileScreen({ navigation }) {
             text: 'Logout',
             style: 'destructive',
             onPress: async () => {
-                try { await logout(); } catch {}
-                logoutUser();
+                // 1. Agar koi session active hai toh pehle backend par terminate karein
+                if (session) {
+                    try {
+                        await endSession();
+                    } catch (e) {
+                        console.log('Session termination on logout notice:', e.message);
+                    }
+                    if (clearSession) {
+                        await clearSession();
+                    }
+                }
+
+                // 2. Token invalidate aur logout complete karein
+                try {
+                    await logout();
+                } catch (e) {
+                    console.log('Logout API call notice:', e.message);
+                } finally {
+                    logoutUser();
+                }
             },
         },
     ]);
 
     return (
-        <View style={styles.flex}>
+        <SafeAreaView style={styles.flex} edges={['top', 'bottom']}>
             <StatusBar barStyle="dark-content" backgroundColor="#F5FAFA" />
 
             {/* Header */}
@@ -211,7 +228,7 @@ export default function ProfileScreen({ navigation }) {
                 </TouchableOpacity>
 
             </ScrollView>
-        </View>
+        </SafeAreaView>
     );
 }
 
@@ -219,13 +236,13 @@ const styles = StyleSheet.create({
     flex: { flex: 1, backgroundColor: '#F5FAFA' },
     header: {
         flexDirection: 'row', alignItems: 'center', gap: 10,
-        paddingHorizontal: 16, paddingTop: 52, paddingBottom: 14,
+        paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14,
         backgroundColor: '#F5FAFA', borderBottomWidth: 0.5, borderBottomColor: '#E5E7EB',
     },
     backBtn: { width: 36, height: 36, justifyContent: 'center', alignItems: 'center' },
     headerTitle: { flex: 1, textAlign: 'center', fontSize: 17, fontWeight: '700', color: '#111827', marginRight: 36 },
 
-    scroll: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 40 },
+    scroll: { paddingHorizontal: 20, paddingTop: 14, paddingBottom: 32 },
 
     profileCard: {
         backgroundColor: '#4E989E', borderRadius: 20, padding: 24,
