@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
     View, Text, TextInput, TouchableOpacity, StyleSheet,
     ScrollView, ActivityIndicator, Modal,
-    KeyboardAvoidingView, Platform, StatusBar
+    KeyboardAvoidingView, Platform, StatusBar, Keyboard
 } from 'react-native';
 import { Feather as Icon } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -50,6 +50,7 @@ export default function StoreDiscoveryScreen({ navigation }) {
     const [searching, setSearching] = useState(false);
     const [hasSearched, setHasSearched] = useState(false);
     const [starting, setStarting] = useState(null);
+    const [keyboardVisible, setKeyboardVisible] = useState(false);
 
     // Session Switch / Exit Dialog State
     const [dialogState, setDialogState] = useState({
@@ -67,7 +68,23 @@ export default function StoreDiscoveryScreen({ navigation }) {
     const [qrScanned, setQrScanned] = useState(false);
     const [permission, requestPermission] = useCameraPermissions();
 
-    useEffect(() => { loadBrands(); }, []);
+    useEffect(() => {
+        loadBrands();
+
+        const showSub = Keyboard.addListener(
+            Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+            () => setKeyboardVisible(true)
+        );
+        const hideSub = Keyboard.addListener(
+            Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+            () => setKeyboardVisible(false)
+        );
+
+        return () => {
+            showSub.remove();
+            hideSub.remove();
+        };
+    }, []);
 
     const loadBrands = async () => {
         setLoadingBrands(true);
@@ -97,7 +114,7 @@ export default function StoreDiscoveryScreen({ navigation }) {
         setStores([]);
         setHasSearched(false);
         setTimeout(() => {
-            scrollRef.current?.scrollTo({ y: finderY.current - 20, animated: true });
+            scrollRef.current?.scrollTo({ y: finderY.current - 10, animated: true });
         }, 150);
     };
 
@@ -105,12 +122,23 @@ export default function StoreDiscoveryScreen({ navigation }) {
         setSelectedBrand(null);
         setStores([]);
         setHasSearched(false);
+        Keyboard.dismiss();
     };
 
     const val = tab === 0 ? pincode : tab === 1 ? district : state;
     const setVal = tab === 0 ? setPincode : tab === 1 ? setDistrict : setState;
 
+    const scrollToInput = () => {
+        setTimeout(() => {
+            scrollRef.current?.scrollTo({
+                y: Math.max(0, finderY.current + 80),
+                animated: true
+            });
+        }, 100);
+    };
+
     const search = async () => {
+        Keyboard.dismiss();
         const query = val.trim();
         if (!query) return;
 
@@ -242,6 +270,7 @@ export default function StoreDiscoveryScreen({ navigation }) {
             <KeyboardAvoidingView
                 style={styles.flex}
                 behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0}
             >
                 {/* Header */}
                 <View style={styles.header}>
@@ -253,7 +282,6 @@ export default function StoreDiscoveryScreen({ navigation }) {
                         <Text style={styles.headerSub}>Scan entrance QR or pick location</Text>
                     </View>
 
-                    {/* Right Header Button: Direct Scan History */}
                     {session ? (
                         <TouchableOpacity
                             onPress={() => navigation.navigate('ScanHistory')}
@@ -269,9 +297,11 @@ export default function StoreDiscoveryScreen({ navigation }) {
 
                 <ScrollView
                     ref={scrollRef}
-                    contentContainerStyle={styles.scroll}
+                    contentContainerStyle={[
+                        styles.scroll,
+                        keyboardVisible && { paddingBottom: 280 }
+                    ]}
                     keyboardShouldPersistTaps="handled"
-                    keyboardDismissMode="on-drag"
                     showsVerticalScrollIndicator={false}
                 >
                     {/* Active Session Card */}
@@ -291,7 +321,6 @@ export default function StoreDiscoveryScreen({ navigation }) {
                                 </View>
                             </View>
 
-                            {/* Buttons: Scan History & Resume Session */}
                             <View style={styles.sessionBtnRow}>
                                 <TouchableOpacity
                                     style={styles.scanHistoryBtn}
@@ -314,7 +343,7 @@ export default function StoreDiscoveryScreen({ navigation }) {
                         </View>
                     )}
 
-                    {/* QR Entrance Card */}
+                    {/* QR Card */}
                     <View style={styles.qrCard}>
                         <View style={styles.qrCardRow}>
                             <View style={styles.qrIcon}><Icon name="maximize" size={26} color={TEAL} /></View>
@@ -424,11 +453,7 @@ export default function StoreDiscoveryScreen({ navigation }) {
                                 value={val}
                                 onChangeText={setVal}
                                 autoCapitalize={tab === 0 ? 'none' : 'words'}
-                                onFocus={() => {
-                                    setTimeout(() => {
-                                        scrollRef.current?.scrollTo({ y: finderY.current - 10, animated: true });
-                                    }, 200);
-                                }}
+                                onFocus={scrollToInput}
                             />
 
                             <TouchableOpacity
@@ -572,7 +597,7 @@ const styles = StyleSheet.create({
     },
     headerTitle: { fontSize: 18, fontWeight: '800', color: INK },
     headerSub: { fontSize: 12, color: MUTED, marginTop: 2, fontWeight: '500' },
-    scroll: { paddingHorizontal: 20, paddingBottom: 40 },
+    scroll: { paddingHorizontal: 20, paddingBottom: 60 },
 
     activeSessionCard: {
         backgroundColor: '#FFFFFF',

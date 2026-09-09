@@ -1,17 +1,40 @@
 import React, { useState } from 'react';
 import {
     View, Text, TouchableOpacity, StyleSheet,
-    ScrollView, Alert, StatusBar, Switch,
+    ScrollView, StatusBar, Switch, Modal, ActivityIndicator
 } from 'react-native';
 import { Feather as Icon } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../store/AuthContext';
 import { logout, endSession } from '../../services/api';
 
+const TEAL = '#4E989E';
+const TEAL_SOFT = '#EAF5F5';
+const TEAL_SHADOW = '#36696D';
+const BG = '#F5FAFA';
+const INK = '#111827';
+const MUTED = '#6B7280';
+const BORDER = '#E5E7EB';
+const CARD_BG = '#FFFFFF';
+const DANGER = '#EF4444';
+const DANGER_SOFT = '#FEE2E2';
+
 export default function ProfileScreen({ navigation }) {
     const { user, logoutUser, session, clearSession } = useAuth();
     const [hideSensitive, setHideSensitive] = useState(false);
     const [darkMode, setDarkMode] = useState(false);
+
+    // Logout Modal State
+    const [logoutModalVisible, setLogoutModalVisible] = useState(false);
+    const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+    // Info/Feature Modal State
+    const [infoModal, setInfoModal] = useState({
+        visible: false,
+        title: '',
+        icon: 'info',
+        content: null,
+    });
 
     const initials = (user?.name || 'S')
         .trim()
@@ -21,60 +44,44 @@ export default function ProfileScreen({ navigation }) {
         .slice(0, 2)
         .toUpperCase();
 
-    const handleNavigate = (screenName, title) => {
+    const handleConfirmLogout = async () => {
+        setIsLoggingOut(true);
         try {
-            navigation.navigate(screenName);
-        } catch {
-            Alert.alert(title, 'This feature is coming soon!');
+            if (session) {
+                await endSession();
+            }
+        } catch (e) {
+            console.log('Session termination on logout notice:', e.message);
+        } finally {
+            if (clearSession) await clearSession();
+            try {
+                await logout();
+            } catch (e) {
+                console.log('Logout notice:', e.message);
+            } finally {
+                setIsLoggingOut(false);
+                setLogoutModalVisible(false);
+                logoutUser();
+            }
         }
     };
 
-    const handleLogout = () => Alert.alert('Logout', 'Are you sure you want to log out?', [
-        { text: 'Cancel', style: 'cancel' },
-        {
-            text: 'Logout',
-            style: 'destructive',
-            onPress: async () => {
-                // 1. Agar koi session active hai toh pehle backend par terminate karein
-                if (session) {
-                    try {
-                        await endSession();
-                    } catch (e) {
-                        console.log('Session termination on logout notice:', e.message);
-                    }
-                    if (clearSession) {
-                        await clearSession();
-                    }
-                }
-
-                // 2. Token invalidate aur logout complete karein
-                try {
-                    await logout();
-                } catch (e) {
-                    console.log('Logout API call notice:', e.message);
-                } finally {
-                    logoutUser();
-                }
-            },
-        },
-    ]);
-
     return (
         <SafeAreaView style={styles.flex} edges={['top', 'bottom']}>
-            <StatusBar barStyle="dark-content" backgroundColor="#F5FAFA" />
+            <StatusBar barStyle="dark-content" backgroundColor={BG} />
 
             {/* Header */}
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-                    <Icon name="arrow-left" size={20} color="#374151" />
+                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} activeOpacity={0.7}>
+                    <Icon name="arrow-left" size={20} color={INK} />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>Profile</Text>
+                <Text style={styles.headerTitle}>Account & Settings</Text>
                 <View style={{ width: 36 }} />
             </View>
 
             <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
 
-                {/* Profile Card */}
+                {/* Profile Identity Card */}
                 <View style={styles.profileCard}>
                     <View style={styles.avatar}>
                         <Text style={styles.avatarText}>{initials}</Text>
@@ -83,7 +90,7 @@ export default function ProfileScreen({ navigation }) {
                     <Text style={styles.phone}>+91 {user?.phone || 'XXXXXXXXXX'}</Text>
                 </View>
 
-                {/* Quick Actions */}
+                {/* Quick Interactive Actions */}
                 <View style={styles.quickRow}>
                     <TouchableOpacity
                         style={styles.quickBox}
@@ -91,229 +98,370 @@ export default function ProfileScreen({ navigation }) {
                         activeOpacity={0.7}
                     >
                         <View style={styles.quickIconBox}>
-                            <Icon name="shopping-bag" size={20} color="#4E989E" />
+                            <Icon name="file-text" size={20} color={TEAL} />
                         </View>
-                        <Text style={styles.quickText}>Your Orders</Text>
+                        <Text style={styles.quickText}>Invoices</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
                         style={styles.quickBox}
-                        onPress={() => handleNavigate('Wallet', 'My Wallet')}
+                        onPress={() => setInfoModal({
+                            visible: true,
+                            title: 'ZeroQ Wallet',
+                            icon: 'credit-card',
+                            content: (
+                                <View style={styles.modalBodyWrap}>
+                                    <Text style={styles.walletBalanceTitle}>Available Cash Balance</Text>
+                                    <Text style={styles.walletBalanceAmount}>₹0.00</Text>
+                                    <Text style={styles.modalDesc}>Wallet funds are automatically adjusted during your counter or self-checkout payments.</Text>
+                                </View>
+                            )
+                        })}
                         activeOpacity={0.7}
                     >
                         <View style={styles.quickIconBox}>
-                            <Icon name="credit-card" size={20} color="#4E989E" />
+                            <Icon name="credit-card" size={20} color={TEAL} />
                         </View>
                         <Text style={styles.quickText}>My Wallet</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
                         style={styles.quickBox}
-                        onPress={() => handleNavigate('Support', 'Help & Support')}
+                        onPress={() => setInfoModal({
+                            visible: true,
+                            title: 'Store Support',
+                            icon: 'message-circle',
+                            content: (
+                                <View style={styles.modalBodyWrap}>
+                                    <Text style={styles.infoHighlight}>Customer Desk Available: 8 AM - 10 PM</Text>
+                                    <Text style={styles.modalDesc}>For billing discrepancies, return inquiries, or scanner support, visit the customer counter or email support@zeroq.app.</Text>
+                                </View>
+                            )
+                        })}
                         activeOpacity={0.7}
                     >
                         <View style={styles.quickIconBox}>
-                            <Icon name="message-circle" size={20} color="#4E989E" />
+                            <Icon name="message-circle" size={20} color={TEAL} />
                         </View>
-                        <Text style={styles.quickText}>Need help?</Text>
+                        <Text style={styles.quickText}>Help Desk</Text>
                     </TouchableOpacity>
                 </View>
 
-                {/* Preferences Section */}
+                {/* Preferences */}
                 <Text style={styles.sectionTitle}>Preferences</Text>
 
-                {/* Appearance */}
                 <View style={styles.settingRow}>
                     <View style={styles.settingLeft}>
-                        <Icon name={darkMode ? 'moon' : 'sun'} size={18} color="#374151" />
-                        <Text style={styles.settingLabel}>Appearance</Text>
+                        <Icon name={darkMode ? 'moon' : 'sun'} size={18} color={INK} />
+                        <Text style={styles.settingLabel}>Display Mode</Text>
                     </View>
                     <TouchableOpacity
                         style={styles.appearancePill}
-                        onPress={() => {
-                            setDarkMode(!darkMode);
-                            Alert.alert('Theme', `${!darkMode ? 'Dark' : 'Light'} theme mode toggled.`);
-                        }}
+                        onPress={() => setDarkMode(!darkMode)}
+                        activeOpacity={0.7}
                     >
                         <Text style={styles.appearancePillText}>{darkMode ? 'DARK' : 'LIGHT'}</Text>
-                        <Icon name="chevron-down" size={14} color="#4E989E" />
+                        <Icon name="refresh-cw" size={12} color={TEAL} />
                     </TouchableOpacity>
                 </View>
 
-                {/* Hide Sensitive Items Toggle */}
                 <View style={styles.toggleCard}>
                     <View style={styles.toggleIconBox}>
-                        <Icon name="eye-off" size={18} color="#4E989E" />
+                        <Icon name="eye-off" size={18} color={TEAL} />
                     </View>
                     <View style={{ flex: 1 }}>
                         <Text style={styles.toggleTitle}>Hide sensitive items</Text>
                         <Text style={styles.toggleSub}>
-                            Sexual wellness, tobacco and other sensitive items will be hidden during store browsing
+                            Restricted and age-sensitive products remain hidden from browsing cards
                         </Text>
                     </View>
                     <Switch
                         value={hideSensitive}
                         onValueChange={setHideSensitive}
-                        trackColor={{ false: '#D1D5DB', true: '#4E989E' }}
-                        thumbColor="#fff"
+                        trackColor={{ false: '#D1D5DB', true: TEAL }}
+                        thumbColor="#FFFFFF"
                     />
                 </View>
 
-                {/* Your Information */}
+                {/* Account Details & Utilities */}
                 <Text style={styles.sectionTitle}>Your Information</Text>
                 <View style={styles.menuCard}>
                     <TouchableOpacity
                         style={styles.menuRow}
-                        onPress={() => handleNavigate('AddressBook', 'Address Book')}
+                        onPress={() => setInfoModal({
+                            visible: true,
+                            title: 'Registered Addresses',
+                            icon: 'book-open',
+                            content: (
+                                <View style={styles.modalBodyWrap}>
+                                    <Text style={styles.infoHighlight}>Default Billing Address</Text>
+                                    <Text style={styles.modalDesc}>Standard retail billing is tied to your verified phone number (+91 {user?.phone || 'XXXXXXXXXX'}).</Text>
+                                </View>
+                            )
+                        })}
                     >
-                        <View style={styles.menuIconBox}><Icon name="book-open" size={18} color="#4E989E" /></View>
+                        <View style={styles.menuIconBox}><Icon name="book-open" size={18} color={TEAL} /></View>
                         <Text style={styles.menuText}>Address Book</Text>
-                        <Icon name="chevron-right" size={18} color="#9CA3AF" />
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={styles.menuRow}
-                        onPress={() => handleNavigate('Wishlist', 'Your Wishlist')}
-                    >
-                        <View style={styles.menuIconBox}><Icon name="heart" size={18} color="#4E989E" /></View>
-                        <Text style={styles.menuText}>Your Wishlist</Text>
-                        <Icon name="chevron-right" size={18} color="#9CA3AF" />
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={styles.menuRow}
-                        onPress={() => handleNavigate('GSTDetails', 'GST Details')}
-                    >
-                        <View style={styles.menuIconBox}><Icon name="file-text" size={18} color="#4E989E" /></View>
-                        <Text style={styles.menuText}>GST Details</Text>
-                        <Icon name="chevron-right" size={18} color="#9CA3AF" />
+                        <Icon name="chevron-right" size={18} color={MUTED} />
                     </TouchableOpacity>
 
                     <TouchableOpacity
                         style={[styles.menuRow, { borderBottomWidth: 0 }]}
-                        onPress={() => handleNavigate('GiftCards', 'E-Gift Cards')}
+                        onPress={() => setInfoModal({
+                            visible: true,
+                            title: 'E-Gift Cards',
+                            icon: 'gift',
+                            content: (
+                                <View style={styles.modalBodyWrap}>
+                                    <Text style={styles.infoHighlight}>No Active Vouchers</Text>
+                                    <Text style={styles.modalDesc}>Gift cards issued by supermarket brands can be redeemed at the checkout counter.</Text>
+                                </View>
+                            )
+                        })}
                     >
-                        <View style={styles.menuIconBox}><Icon name="gift" size={18} color="#4E989E" /></View>
+                        <View style={styles.menuIconBox}><Icon name="gift" size={18} color={TEAL} /></View>
                         <Text style={styles.menuText}>E-Gift Cards</Text>
-                        <Icon name="chevron-right" size={18} color="#9CA3AF" />
+                        <Icon name="chevron-right" size={18} color={MUTED} />
                     </TouchableOpacity>
                 </View>
 
-                {/* Support */}
-                <Text style={styles.sectionTitle}>Support</Text>
+                {/* Legal & Policies */}
+                <Text style={styles.sectionTitle}>Legal</Text>
                 <View style={styles.menuCard}>
                     <TouchableOpacity
-                        style={styles.menuRow}
-                        onPress={() => handleNavigate('Support', 'Help & Support')}
-                    >
-                        <View style={styles.menuIconBox}><Icon name="help-circle" size={18} color="#4E989E" /></View>
-                        <Text style={styles.menuText}>Help &amp; Support</Text>
-                        <Icon name="chevron-right" size={18} color="#9CA3AF" />
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
                         style={[styles.menuRow, { borderBottomWidth: 0 }]}
-                        onPress={() => handleNavigate('Terms', 'Terms & Privacy Policy')}
+                        onPress={() => setInfoModal({
+                            visible: true,
+                            title: 'Terms & Privacy',
+                            icon: 'shield',
+                            content: (
+                                <View style={styles.modalBodyWrap}>
+                                    <Text style={styles.infoHighlight}>ZeroQ Privacy Compliance</Text>
+                                    <Text style={styles.modalDesc}>Your in-store scanning logs and cart data are encrypted and purged after order settlement.</Text>
+                                </View>
+                            )
+                        })}
                     >
-                        <View style={styles.menuIconBox}><Icon name="shield" size={18} color="#4E989E" /></View>
+                        <View style={styles.menuIconBox}><Icon name="shield" size={18} color={TEAL} /></View>
                         <Text style={styles.menuText}>Terms &amp; Privacy Policy</Text>
-                        <Icon name="chevron-right" size={18} color="#9CA3AF" />
+                        <Icon name="chevron-right" size={18} color={MUTED} />
                     </TouchableOpacity>
                 </View>
 
-                {/* Logout */}
-                <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.8}>
-                    <Icon name="log-out" size={18} color="#EF4444" />
-                    <Text style={styles.logoutText}>Logout</Text>
+                {/* Professional Logout Button */}
+                <TouchableOpacity
+                    style={styles.logoutBtn}
+                    onPress={() => setLogoutModalVisible(true)}
+                    activeOpacity={0.85}
+                >
+                    <Icon name="log-out" size={18} color={DANGER} />
+                    <Text style={styles.logoutText}>Sign Out</Text>
                 </TouchableOpacity>
 
             </ScrollView>
+
+            {/* Custom Feature Dialog Modal */}
+            <Modal
+                visible={infoModal.visible}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setInfoModal(prev => ({ ...prev, visible: false }))}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.dialogCard}>
+                        <View style={styles.dialogIconBox}>
+                            <Icon name={infoModal.icon} size={22} color={TEAL} />
+                        </View>
+                        <Text style={styles.dialogTitle}>{infoModal.title}</Text>
+                        {infoModal.content}
+                        <TouchableOpacity
+                            style={styles.dialogPrimaryBtn}
+                            onPress={() => setInfoModal(prev => ({ ...prev, visible: false }))}
+                        >
+                            <Text style={styles.dialogPrimaryText}>Got it</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Professional Logout Confirmation Modal */}
+            <Modal
+                visible={logoutModalVisible}
+                transparent
+                animationType="fade"
+                onRequestClose={() => !isLoggingOut && setLogoutModalVisible(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.logoutCard}>
+                        <View style={styles.logoutIconBox}>
+                            <Icon name="alert-triangle" size={24} color={DANGER} />
+                        </View>
+                        <Text style={styles.logoutModalTitle}>Confirm Sign Out</Text>
+                        <Text style={styles.logoutModalDesc}>
+                            {session
+                                ? `You have an ongoing session at ${session.storeName}. Signing out will close your active shopping session.`
+                                : 'Are you sure you want to sign out of your ZeroQ account?'}
+                        </Text>
+
+                        <View style={styles.modalActionsRow}>
+                            <TouchableOpacity
+                                style={styles.modalSecondaryBtn}
+                                onPress={() => setLogoutModalVisible(false)}
+                                disabled={isLoggingOut}
+                            >
+                                <Text style={styles.modalSecondaryText}>Cancel</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={styles.modalDestructiveBtn}
+                                onPress={handleConfirmLogout}
+                                disabled={isLoggingOut}
+                            >
+                                {isLoggingOut ? (
+                                    <ActivityIndicator size="small" color="#FFFFFF" />
+                                ) : (
+                                    <Text style={styles.modalDestructiveText}>Sign Out</Text>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
         </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
-    flex: { flex: 1, backgroundColor: '#F5FAFA' },
+    flex: { flex: 1, backgroundColor: BG },
     header: {
-        flexDirection: 'row', alignItems: 'center', gap: 10,
+        flexDirection: 'row', alignItems: 'center',
         paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14,
-        backgroundColor: '#F5FAFA', borderBottomWidth: 0.5, borderBottomColor: '#E5E7EB',
+        backgroundColor: BG, borderBottomWidth: 1, borderBottomColor: BORDER,
     },
     backBtn: { width: 36, height: 36, justifyContent: 'center', alignItems: 'center' },
-    headerTitle: { flex: 1, textAlign: 'center', fontSize: 17, fontWeight: '700', color: '#111827', marginRight: 36 },
+    headerTitle: { flex: 1, textAlign: 'center', fontSize: 17, fontWeight: '800', color: INK },
 
     scroll: { paddingHorizontal: 20, paddingTop: 14, paddingBottom: 32 },
 
     profileCard: {
-        backgroundColor: '#4E989E', borderRadius: 20, padding: 24,
-        alignItems: 'center', marginBottom: 20,
-        shadowColor: '#36696D', shadowOpacity: 0.25, shadowRadius: 14, elevation: 5,
+        backgroundColor: TEAL, borderRadius: 20, padding: 22,
+        alignItems: 'center', marginBottom: 18,
+        shadowColor: TEAL_SHADOW, shadowOpacity: 0.22, shadowRadius: 12, elevation: 4,
     },
     avatar: {
-        width: 68, height: 68, borderRadius: 34, backgroundColor: 'rgba(255,255,255,0.25)',
-        justifyContent: 'center', alignItems: 'center', marginBottom: 12,
+        width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(255,255,255,0.25)',
+        justifyContent: 'center', alignItems: 'center', marginBottom: 10,
     },
-    avatarText: { fontSize: 24, fontWeight: '800', color: '#fff' },
-    name: { fontSize: 20, fontWeight: '800', color: '#fff' },
-    phone: { fontSize: 13, color: 'rgba(255,255,255,0.85)', marginTop: 2 },
+    avatarText: { fontSize: 22, fontWeight: '800', color: '#FFFFFF' },
+    name: { fontSize: 19, fontWeight: '800', color: '#FFFFFF' },
+    phone: { fontSize: 13, color: 'rgba(255,255,255,0.85)', marginTop: 2, fontWeight: '500' },
 
-    quickRow: { flexDirection: 'row', gap: 12, marginBottom: 20 },
+    quickRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
     quickBox: {
-        flex: 1, backgroundColor: '#fff', borderRadius: 16, paddingVertical: 16,
-        alignItems: 'center', gap: 8,
-        shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 2,
+        flex: 1, backgroundColor: CARD_BG, borderRadius: 14, paddingVertical: 14,
+        alignItems: 'center', gap: 6,
+        borderWidth: 1, borderColor: BORDER,
     },
     quickIconBox: {
-        width: 40, height: 40, borderRadius: 12, backgroundColor: '#EAF5F5',
+        width: 38, height: 38, borderRadius: 10, backgroundColor: TEAL_SOFT,
         justifyContent: 'center', alignItems: 'center',
     },
-    quickText: { fontSize: 12, fontWeight: '600', color: '#111827', textAlign: 'center' },
+    quickText: { fontSize: 12, fontWeight: '700', color: INK },
+
+    sectionTitle: { fontSize: 12, fontWeight: '800', color: MUTED, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.7 },
 
     settingRow: {
         flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-        backgroundColor: '#fff', borderRadius: 14, padding: 16, marginBottom: 12,
-        shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 6, elevation: 1,
+        backgroundColor: CARD_BG, borderRadius: 14, padding: 14, marginBottom: 10,
+        borderWidth: 1, borderColor: BORDER,
     },
     settingLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-    settingLabel: { fontSize: 14, fontWeight: '600', color: '#111827' },
+    settingLabel: { fontSize: 14, fontWeight: '700', color: INK },
     appearancePill: {
-        flexDirection: 'row', alignItems: 'center', gap: 4,
-        backgroundColor: '#EAF5F5', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8,
+        flexDirection: 'row', alignItems: 'center', gap: 6,
+        backgroundColor: TEAL_SOFT, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8,
     },
-    appearancePillText: { fontSize: 12, fontWeight: '700', color: '#4E989E' },
+    appearancePillText: { fontSize: 11, fontWeight: '800', color: TEAL },
 
     toggleCard: {
-        flexDirection: 'row', alignItems: 'flex-start', gap: 12,
-        backgroundColor: '#fff', borderRadius: 14, padding: 16, marginBottom: 20,
-        shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 6, elevation: 1,
+        flexDirection: 'row', alignItems: 'center', gap: 12,
+        backgroundColor: CARD_BG, borderRadius: 14, padding: 14, marginBottom: 20,
+        borderWidth: 1, borderColor: BORDER,
     },
     toggleIconBox: {
-        width: 34, height: 34, borderRadius: 10, backgroundColor: '#EAF5F5',
-        justifyContent: 'center', alignItems: 'center', marginTop: 2,
+        width: 36, height: 36, borderRadius: 10, backgroundColor: TEAL_SOFT,
+        justifyContent: 'center', alignItems: 'center',
     },
-    toggleTitle: { fontSize: 14, fontWeight: '700', color: '#111827' },
-    toggleSub: { fontSize: 12, color: '#6B7280', marginTop: 3, lineHeight: 17 },
+    toggleTitle: { fontSize: 13, fontWeight: '700', color: INK },
+    toggleSub: { fontSize: 11, color: MUTED, marginTop: 2, lineHeight: 16 },
 
-    sectionTitle: { fontSize: 14, fontWeight: '700', color: '#6B7280', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 },
     menuCard: {
-        backgroundColor: '#fff', borderRadius: 16, marginBottom: 20,
-        shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 2,
+        backgroundColor: CARD_BG, borderRadius: 16, marginBottom: 18,
+        borderWidth: 1, borderColor: BORDER,
     },
     menuRow: {
         flexDirection: 'row', alignItems: 'center', gap: 12,
-        paddingHorizontal: 16, paddingVertical: 15,
-        borderBottomWidth: 0.5, borderBottomColor: '#F0F0F0',
+        paddingHorizontal: 14, paddingVertical: 14,
+        borderBottomWidth: 1, borderBottomColor: '#F3F4F6',
     },
     menuIconBox: {
-        width: 34, height: 34, borderRadius: 10, backgroundColor: '#EAF5F5',
+        width: 34, height: 34, borderRadius: 9, backgroundColor: TEAL_SOFT,
         justifyContent: 'center', alignItems: 'center',
     },
-    menuText: { flex: 1, fontSize: 14, fontWeight: '600', color: '#111827' },
+    menuText: { flex: 1, fontSize: 13, fontWeight: '700', color: INK },
 
     logoutBtn: {
         flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8,
-        backgroundColor: '#FEF2F2', borderRadius: 14, paddingVertical: 14,
-        borderWidth: 1, borderColor: '#FECACA', marginTop: 4,
+        backgroundColor: DANGER_SOFT, borderRadius: 14, paddingVertical: 13,
+        borderWidth: 1, borderColor: '#FECACA', marginTop: 6,
     },
-    logoutText: { color: '#EF4444', fontSize: 15, fontWeight: '700' },
+    logoutText: { color: DANGER, fontSize: 14, fontWeight: '800' },
+
+    // Modals
+    modalOverlay: {
+        flex: 1, backgroundColor: 'rgba(17, 24, 39, 0.65)',
+        justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24,
+    },
+    dialogCard: {
+        width: '100%', maxWidth: 330, backgroundColor: CARD_BG,
+        borderRadius: 20, padding: 22, alignItems: 'center',
+    },
+    dialogIconBox: {
+        width: 46, height: 46, borderRadius: 14, backgroundColor: TEAL_SOFT,
+        justifyContent: 'center', alignItems: 'center', marginBottom: 12,
+    },
+    dialogTitle: { fontSize: 16, fontWeight: '800', color: INK, marginBottom: 8 },
+    modalBodyWrap: { alignItems: 'center', marginVertical: 8 },
+    walletBalanceTitle: { fontSize: 12, color: MUTED, fontWeight: '600' },
+    walletBalanceAmount: { fontSize: 26, fontWeight: '800', color: INK, marginVertical: 4 },
+    infoHighlight: { fontSize: 13, fontWeight: '700', color: TEAL, marginBottom: 4 },
+    modalDesc: { fontSize: 12, color: MUTED, textAlign: 'center', lineHeight: 18 },
+    dialogPrimaryBtn: {
+        width: '100%', backgroundColor: TEAL, borderRadius: 12,
+        paddingVertical: 11, alignItems: 'center', marginTop: 16,
+    },
+    dialogPrimaryText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
+
+    logoutCard: {
+        width: '100%', maxWidth: 330, backgroundColor: CARD_BG,
+        borderRadius: 20, padding: 22, alignItems: 'center',
+    },
+    logoutIconBox: {
+        width: 48, height: 48, borderRadius: 24, backgroundColor: DANGER_SOFT,
+        justifyContent: 'center', alignItems: 'center', marginBottom: 12,
+    },
+    logoutModalTitle: { fontSize: 17, fontWeight: '800', color: INK, marginBottom: 6 },
+    logoutModalDesc: { fontSize: 13, color: MUTED, textAlign: 'center', lineHeight: 18, marginBottom: 20 },
+    modalActionsRow: { flexDirection: 'row', gap: 10, width: '100%' },
+    modalSecondaryBtn: {
+        flex: 1, backgroundColor: '#F3F4F6', borderRadius: 12,
+        paddingVertical: 12, alignItems: 'center',
+    },
+    modalSecondaryText: { fontSize: 13, fontWeight: '700', color: MUTED },
+    modalDestructiveBtn: {
+        flex: 1, backgroundColor: DANGER, borderRadius: 12,
+        paddingVertical: 12, alignItems: 'center',
+    },
+    modalDestructiveText: { fontSize: 13, fontWeight: '700', color: '#FFFFFF' },
 });

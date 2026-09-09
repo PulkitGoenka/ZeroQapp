@@ -7,12 +7,16 @@ import {
   ActivityIndicator,
   StatusBar,
   BackHandler,
+  Dimensions,
 } from 'react-native';
 import { Feather as Icon } from '@expo/vector-icons';
 import Barcode from 'react-native-barcode-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../store/AuthContext';
 import { getPaymentStatus, endSession } from '../../services/api';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const BARCODE_MAX_WIDTH = Math.min(SCREEN_WIDTH - 80, 280);
 
 const TEAL = '#4E989E';
 const TEAL_SOFT = '#EAF5F5';
@@ -34,11 +38,10 @@ export default function PaymentQrScreen({ navigation, route }) {
   const [status, setStatus] = useState('PENDING');
   const pollRef = useRef(null);
 
-  // Complete & Clean Session on Payment Confirmation
   const finalizeSessionAndExit = useCallback(async () => {
     if (pollRef.current) clearInterval(pollRef.current);
     try {
-      await endSession(); // Mark session INACTIVE/COMPLETED in PostgreSQL & flush Redis Cart
+      await endSession();
     } catch (e) {
       console.log('Session end trigger note:', e.message);
     } finally {
@@ -50,7 +53,6 @@ export default function PaymentQrScreen({ navigation, route }) {
     }
   }, [clearSession, navigation]);
 
-  // Back Button Handling
   useEffect(() => {
     const onBack = () => {
       if (status === 'PAID' || status === 'VERIFIED') {
@@ -64,7 +66,6 @@ export default function PaymentQrScreen({ navigation, route }) {
     return () => sub.remove();
   }, [status, navigation, finalizeSessionAndExit]);
 
-  // Status Polling from Cashier POS
   useEffect(() => {
     if (!orderId) return;
 
@@ -77,7 +78,6 @@ export default function PaymentQrScreen({ navigation, route }) {
           setStatus(current);
         }
 
-        // Cashier confirmed payment
         if (current === 'PAID' || current === 'VERIFIED' || current === 'COMPLETED') {
           clearInterval(pollRef.current);
         }
@@ -91,7 +91,6 @@ export default function PaymentQrScreen({ navigation, route }) {
     };
   }, [orderId, status]);
 
-  // ── Success State: Cashier Confirmed & Added to Bill History ──────────────
   if (status === 'PAID' || status === 'VERIFIED' || status === 'COMPLETED') {
     return (
         <SafeAreaView style={styles.flex} edges={['top', 'bottom']}>
@@ -124,7 +123,6 @@ export default function PaymentQrScreen({ navigation, route }) {
     );
   }
 
-  // ── Waiting State: Show Barcode for Cashier Handheld / POS Scanner ───────
   const barcodeValue = String(orderId || 'ORDER-PENDING');
 
   return (
@@ -152,20 +150,22 @@ export default function PaymentQrScreen({ navigation, route }) {
             <Text style={styles.amountVal}>₹{totalAmount || 0}</Text>
           </View>
 
-          {/* Barcode View */}
+          {/* Barcode Card Constrained to Screen */}
           <View style={styles.barcodeCard}>
             <Text style={styles.barcodeHeader}>CASHIER SCAN TAG</Text>
             <View style={styles.barcodeWrapper}>
               <Barcode
                   value={barcodeValue}
                   format="CODE128"
-                  singleBarWidth={2}
-                  height={85}
+                  maxWidth={BARCODE_MAX_WIDTH}
+                  height={90}
                   lineColor={INK}
                   backgroundColor="#FFFFFF"
               />
             </View>
-            <Text style={styles.barcodeString}>{barcodeValue}</Text>
+            <Text style={styles.barcodeString} numberOfLines={1} ellipsizeMode="middle">
+              {barcodeValue}
+            </Text>
           </View>
 
           <View style={styles.guideCard}>
@@ -228,35 +228,42 @@ const styles = StyleSheet.create({
     width: '100%',
     backgroundColor: CARD_BG,
     borderRadius: 18,
-    paddingVertical: 22,
+    paddingVertical: 20,
     paddingHorizontal: 16,
     alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1,
     borderColor: BORDER,
     shadowColor: '#000',
     shadowOpacity: 0.05,
     shadowRadius: 8,
     elevation: 2,
+    overflow: 'hidden',
   },
   barcodeHeader: {
     fontSize: 11,
     fontWeight: '800',
     color: MUTED,
     letterSpacing: 1.2,
-    marginBottom: 14,
+    marginBottom: 12,
   },
   barcodeWrapper: {
-    paddingVertical: 10,
+    width: '100%',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    width: '100%',
   },
   barcodeString: {
     fontSize: 13,
     fontWeight: '700',
-    letterSpacing: 1.5,
+    letterSpacing: 1,
     color: INK,
     marginTop: 10,
+    maxWidth: '90%',
+    textAlign: 'center',
   },
 
   guideCard: {

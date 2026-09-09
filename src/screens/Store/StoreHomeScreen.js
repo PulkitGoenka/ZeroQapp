@@ -142,7 +142,7 @@ export default function StoreHomeScreen({ navigation }) {
                             <Text style={styles.sessionStatusLabel}>ACTIVE SHOPPING SESSION</Text>
                         </View>
                         <View style={styles.storeIdBadge}>
-                            <Text style={styles.storeIdText}>ID: {session.storeId || session.id || 'N/A'}</Text>
+                            <Text style={styles.storeIdText}>ID: {session.storeId || 'N/A'}</Text>
                         </View>
                     </View>
 
@@ -311,7 +311,7 @@ export default function StoreHomeScreen({ navigation }) {
                 {/* History Tab */}
                 <TouchableOpacity
                     style={styles.tabButton}
-                    onPress={() => navigation.navigate('History')}
+                    onPress={() => navigation.navigate('ScanHistory')}
                     activeOpacity={0.8}
                 >
                     <Icon name="clock" size={20} color={MUTED} />
