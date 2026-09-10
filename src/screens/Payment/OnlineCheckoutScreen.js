@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
     View,
     Text,
@@ -8,14 +8,17 @@ import {
     ActivityIndicator,
     StatusBar,
     Modal,
+    BackHandler,
+    Alert,
 } from 'react-native';
 import { Feather as Icon } from '@expo/vector-icons';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import RazorpayCheckout from 'react-native-razorpay';
 import { useAuth } from '../../store/AuthContext';
-import { getCart, initiateOnlinePayment } from '../../services/api';
+import { getCart, initiateOnlinePayment, verifyRazorpayPayment, endSession } from '../../services/api';
 
 const TEAL = '#4E989E';
 const TEAL_SOFT = '#EAF5F5';
-const TEAL_SHADOW = '#36696D';
 const GOLD = '#F7B32B';
 const BG = '#F5FAFA';
 const INK = '#111827';
@@ -24,22 +27,28 @@ const MUTED = '#6B7280';
 const BORDER = '#E5E7EB';
 const CARD_BG = '#FFFFFF';
 const SUCCESS = '#059669';
+const SUCCESS_SOFT = '#ECFDF5';
 const DANGER = '#DC2626';
+const DANGER_SOFT = '#FEE2E2';
 
 export default function OnlineCheckoutScreen({ navigation }) {
-    const { session, clearSession } = useAuth();
+    const insets = useSafeAreaInsets();
+    const { session, clearSession, user } = useAuth();
     const [bill, setBill] = useState(null);
     const [loading, setLoading] = useState(true);
     const [selectedMethod, setSelectedMethod] = useState('UPI_APP');
     const [processing, setProcessing] = useState(false);
     const [billModalVisible, setBillModalVisible] = useState(false);
-    const [resultModal, setResultModal] = useState({ visible: false, success: false });
+
+    // State flow: 'CHECKOUT' | 'SUCCESS' | 'FAILED'
+    const [paymentState, setPaymentState] = useState('CHECKOUT');
+    const [verifiedBill, setVerifiedBill] = useState(null);
 
     useEffect(() => {
         (async () => {
             try {
                 const res = await getCart();
-                setBill(res.data);
+                setBill(res?.data || res);
             } catch (e) {
                 navigation.goBack();
             } finally {
@@ -48,29 +57,105 @@ export default function OnlineCheckoutScreen({ navigation }) {
         })();
     }, [navigation]);
 
+    // Handle session teardown and home redirect
+    const handleCompleteAndGoHome = useCallback(async () => {
+        try {
+            await endSession();
+        } catch (e) {
+            console.log('Session termination note:', e.message);
+        } finally {
+            await clearSession();
+            navigation.reset({
+                index: 0,
+                routes: [{ name: 'MainTabs' }],
+            });
+        }
+    }, [clearSession, navigation]);
+
+    // Hardware Back Controller
+    useEffect(() => {
+        const onBackPress = () => {
+            if (paymentState === 'SUCCESS') {
+                handleCompleteAndGoHome();
+                return true;
+            }
+            if (paymentState === 'FAILED') {
+                setPaymentState('CHECKOUT');
+                return true;
+            }
+            navigation.goBack();
+            return true;
+        };
+
+        const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+        return () => sub.remove();
+    }, [paymentState, handleCompleteAndGoHome, navigation]);
+
     const handlePay = async () => {
         setProcessing(true);
         try {
-            await initiateOnlinePayment(selectedMethod);
-            setResultModal({ visible: true, success: true });
+            // 1. Backend creates order on Razorpay & reserves checkout
+            const res = await initiateOnlinePayment(selectedMethod);
+            const initData = res?.data || res;
+
+            const razorpayOrderId = initData?.razorpayOrderId;
+            const amountInPaise = initData?.amountInPaise || (bill?.totalAmount * 100);
+            const keyId = initData?.razorpayKeyId;
+
+            // 2. Razorpay SDK checkout options
+            const options = {
+                description: 'ZeroQ Self-Checkout Store Purchase',
+                currency: 'INR',
+                key: keyId,
+                amount: amountInPaise,
+                name: session?.storeName || 'ZeroQ Supermarket',
+                order_id: razorpayOrderId,
+                prefill: {
+                    contact: user?.phone || '9999999999',
+                    name: user?.name || 'Customer',
+                },
+                theme: { color: TEAL },
+            };
+
+            // 3. Open Razorpay Gateway
+            RazorpayCheckout.open(options)
+                .then(async (data) => {
+                    // Success callback from SDK
+                    // { razorpay_payment_id, razorpay_order_id, razorpay_signature }
+                    try {
+                        const verifyRes = await verifyRazorpayPayment({
+                            orderId: initData.orderId,
+                            razorpayPaymentId: data.razorpay_payment_id,
+                            razorpayOrderId: data.razorpay_order_id,
+                            razorpaySignature: data.razorpay_signature,
+                        });
+                        setVerifiedBill(verifyRes?.data || verifyRes);
+                        setPaymentState('SUCCESS');
+                    } catch (err) {
+                        Alert.alert('Verification Issue', 'Payment succeeded but signature check failed. Please contact counter.');
+                        setPaymentState('FAILED');
+                    }
+                })
+                .catch((error) => {
+                    console.log('Payment cancelled/failed:', error?.description || error);
+                    setPaymentState('FAILED');
+                })
+                .finally(() => {
+                    setProcessing(false);
+                });
+
         } catch (e) {
-            setResultModal({ visible: true, success: false });
-        } finally {
+            Alert.alert('Gateway Error', e.message || 'Could not initiate checkout.');
+            setPaymentState('FAILED');
             setProcessing(false);
         }
     };
 
-    const handleFinish = async () => {
-        setResultModal({ visible: false, success: false });
-        await clearSession();
-        navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
-    };
-
     if (loading) {
         return (
-            <View style={[styles.flex, styles.center]}>
+            <SafeAreaView style={[styles.flex, styles.center]} edges={['top', 'bottom']}>
                 <ActivityIndicator size="large" color={TEAL} />
-            </View>
+            </SafeAreaView>
         );
     }
 
@@ -78,8 +163,79 @@ export default function OnlineCheckoutScreen({ navigation }) {
     const totalAmount = bill?.totalAmount || 0;
     const totalDiscount = bill?.totalDiscount || 0;
 
+    // ── SCREEN 1: PAYMENT SUCCESSFUL ───────────────────────────────
+    if (paymentState === 'SUCCESS') {
+        return (
+            <SafeAreaView style={styles.flex} edges={['top', 'bottom']}>
+                <StatusBar barStyle="dark-content" backgroundColor={BG} />
+                <View style={styles.resultContainer}>
+                    <View style={styles.successIconCircle}>
+                        <Icon name="check" size={44} color="#FFFFFF" />
+                    </View>
+
+                    <Text style={styles.resultTitle}>Payment Successful!</Text>
+                    <Text style={styles.resultSubtitle}>
+                        Your order has been verified. The digital bill is generated and saved in your permanent invoices.
+                    </Text>
+
+                    <View style={styles.receiptSummaryBox}>
+                        <Text style={styles.summaryLabel}>Amount Paid</Text>
+                        <Text style={styles.summaryAmount}>₹{totalAmount}</Text>
+                        <Text style={styles.summaryStore}>{session?.storeName || 'Supermarket Branch'}</Text>
+                        {verifiedBill?.billRef && (
+                            <Text style={styles.summaryRef}>Bill Ref: {verifiedBill.billRef}</Text>
+                        )}
+                    </View>
+
+                    <TouchableOpacity
+                        style={styles.actionBtnSuccess}
+                        onPress={handleCompleteAndGoHome}
+                        activeOpacity={0.85}
+                    >
+                        <Icon name="home" size={17} color="#412402" />
+                        <Text style={styles.actionBtnSuccessText}>Go to Home Screen</Text>
+                    </TouchableOpacity>
+                </View>
+            </SafeAreaView>
+        );
+    }
+
+    // ── SCREEN 2: PAYMENT UNSUCCESSFUL ─────────────────────────────
+    if (paymentState === 'FAILED') {
+        return (
+            <SafeAreaView style={styles.flex} edges={['top', 'bottom']}>
+                <StatusBar barStyle="dark-content" backgroundColor={BG} />
+                <View style={styles.resultContainer}>
+                    <View style={styles.dangerIconCircle}>
+                        <Icon name="x" size={44} color="#FFFFFF" />
+                    </View>
+
+                    <Text style={styles.resultTitle}>Payment Failed</Text>
+                    <Text style={styles.resultSubtitle}>
+                        Your transaction could not be processed. Don't worry, your cart and items are safely preserved.
+                    </Text>
+
+                    <View style={styles.failedNoticeBox}>
+                        <Icon name="info" size={16} color={DANGER} />
+                        <Text style={styles.failedNoticeText}>No amount was deducted from your account.</Text>
+                    </View>
+
+                    <TouchableOpacity
+                        style={styles.retryBtn}
+                        onPress={() => setPaymentState('CHECKOUT')}
+                        activeOpacity={0.85}
+                    >
+                        <Icon name="refresh-cw" size={16} color="#FFFFFF" />
+                        <Text style={styles.retryBtnText}>Try Again</Text>
+                    </TouchableOpacity>
+                </View>
+            </SafeAreaView>
+        );
+    }
+
+    // ── SCREEN 3: NORMAL CHECKOUT SELECTION ────────────────────────
     return (
-        <View style={styles.flex}>
+        <SafeAreaView style={styles.flex} edges={['top']}>
             <StatusBar barStyle="dark-content" backgroundColor={CARD_BG} />
 
             {/* Header */}
@@ -93,9 +249,10 @@ export default function OnlineCheckoutScreen({ navigation }) {
                         Store: {session?.storeName || 'Supermarket'}
                     </Text>
                 </View>
+                <View style={{ width: 36 }} />
             </View>
 
-            {/* Top Banner (Zepto Style Floating Total) */}
+            {/* Floating Bill Banner */}
             <View style={styles.topBanner}>
                 <View>
                     <Text style={styles.topPayLabel}>To Pay: <Text style={styles.topPayAmount}>₹{totalAmount}</Text></Text>
@@ -113,8 +270,11 @@ export default function OnlineCheckoutScreen({ navigation }) {
                 </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-                {/* Section 1: UPI Options */}
+            <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 90 }]}
+            >
+                {/* UPI Options */}
                 <Text style={styles.sectionHeader}>Pay by UPI</Text>
                 <View style={styles.cardGroup}>
                     <TouchableOpacity
@@ -154,7 +314,7 @@ export default function OnlineCheckoutScreen({ navigation }) {
                     </TouchableOpacity>
                 </View>
 
-                {/* Section 2: Cards */}
+                {/* Cards */}
                 <Text style={styles.sectionHeader}>Credit & Debit Cards</Text>
                 <View style={styles.cardGroup}>
                     <TouchableOpacity
@@ -175,7 +335,7 @@ export default function OnlineCheckoutScreen({ navigation }) {
                     </TouchableOpacity>
                 </View>
 
-                {/* Section 3: Netbanking */}
+                {/* Netbanking */}
                 <Text style={styles.sectionHeader}>Netbanking</Text>
                 <View style={styles.cardGroup}>
                     <View style={styles.bankGrid}>
@@ -203,8 +363,8 @@ export default function OnlineCheckoutScreen({ navigation }) {
                 </View>
             </ScrollView>
 
-            {/* Bottom Sticky Payment CTA */}
-            <View style={styles.footer}>
+            {/* Bottom Sticky Payment Bar */}
+            <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 14) }]}>
                 <View style={styles.footerMeta}>
                     <Text style={styles.footerMetaLabel}>Amount to pay</Text>
                     <Text style={styles.footerMetaAmount}>₹{totalAmount}</Text>
@@ -226,7 +386,7 @@ export default function OnlineCheckoutScreen({ navigation }) {
                 </TouchableOpacity>
             </View>
 
-            {/* Slide-Up Bill Details Modal */}
+            {/* Slide-Up Bill Details Drawer */}
             <Modal visible={billModalVisible} transparent animationType="slide">
                 <View style={styles.modalBackdrop}>
                     <View style={styles.billDrawer}>
@@ -267,41 +427,7 @@ export default function OnlineCheckoutScreen({ navigation }) {
                     </View>
                 </View>
             </Modal>
-
-            {/* Success / Failure Result Dialog */}
-            <Modal visible={resultModal.visible} transparent animationType="fade">
-                <View style={styles.modalBackdropCenter}>
-                    <View style={styles.resultCard}>
-                        <View style={[styles.resultCircle, resultModal.success ? styles.bgSuccess : styles.bgDanger]}>
-                            <Icon name={resultModal.success ? 'check' : 'alert-circle'} size={32} color="#FFFFFF" />
-                        </View>
-                        <Text style={styles.resultTitle}>
-                            {resultModal.success ? 'Payment Successful' : 'Payment Failed'}
-                        </Text>
-                        <Text style={styles.resultSub}>
-                            {resultModal.success
-                                ? 'Your transaction was approved and your store session has ended.'
-                                : 'Unable to process transaction. Please try another method.'}
-                        </Text>
-
-                        {resultModal.success ? (
-                            <TouchableOpacity style={styles.resultBtnSuccess} onPress={handleFinish} activeOpacity={0.85}>
-                                <Icon name="home" size={16} color="#412402" />
-                                <Text style={styles.resultBtnSuccessText}>Go to Home</Text>
-                            </TouchableOpacity>
-                        ) : (
-                            <TouchableOpacity
-                                style={styles.resultBtnRetry}
-                                onPress={() => setResultModal({ visible: false, success: false })}
-                                activeOpacity={0.85}
-                            >
-                                <Text style={styles.resultBtnRetryText}>Try Again</Text>
-                            </TouchableOpacity>
-                        )}
-                    </View>
-                </View>
-            </Modal>
-        </View>
+        </SafeAreaView>
     );
 }
 
@@ -313,7 +439,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: 20,
-        paddingTop: 54,
+        paddingTop: 10,
         paddingBottom: 14,
         backgroundColor: CARD_BG,
         borderBottomWidth: 1,
@@ -355,7 +481,7 @@ const styles = StyleSheet.create({
     },
     viewBillText: { fontSize: 12, fontWeight: '700', color: TEAL },
 
-    scroll: { padding: 20, paddingBottom: 100 },
+    scroll: { padding: 20 },
     sectionHeader: {
         fontSize: 12,
         fontWeight: '800',
@@ -448,10 +574,14 @@ const styles = StyleSheet.create({
         borderTopWidth: 1,
         borderTopColor: BORDER,
         paddingHorizontal: 20,
-        paddingVertical: 14,
+        paddingTop: 12,
         flexDirection: 'row',
         alignItems: 'center',
         gap: 16,
+        shadowColor: '#000',
+        shadowOpacity: 0.08,
+        shadowRadius: 10,
+        elevation: 8,
     },
     footerMeta: { flex: 1 },
     footerMetaLabel: { fontSize: 11, color: MUTED },
@@ -464,15 +594,10 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 8,
-        shadowColor: '#000',
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 2,
     },
     payBtnDisabled: { opacity: 0.6 },
     paySubmitText: { color: '#412402', fontSize: 14, fontWeight: '800' },
 
-    // Drawer
     modalBackdrop: { flex: 1, backgroundColor: 'rgba(17, 24, 39, 0.65)', justifyContent: 'flex-end' },
     billDrawer: {
         backgroundColor: CARD_BG,
@@ -503,29 +628,102 @@ const styles = StyleSheet.create({
     grandLabel: { fontSize: 14, fontWeight: '800', color: INK },
     grandVal: { fontSize: 16, fontWeight: '800', color: INK },
 
-    // Result Center Modal
-    modalBackdropCenter: { flex: 1, backgroundColor: 'rgba(17, 24, 39, 0.7)', justifyContent: 'center', alignItems: 'center', padding: 24 },
-    resultCard: { width: '100%', maxWidth: 330, backgroundColor: CARD_BG, borderRadius: 20, padding: 24, alignItems: 'center' },
-    resultCircle: { width: 56, height: 56, borderRadius: 28, justifyContent: 'center', alignItems: 'center', marginBottom: 14 },
-    bgSuccess: { backgroundColor: SUCCESS },
-    bgDanger: { backgroundColor: DANGER },
-    resultTitle: { fontSize: 18, fontWeight: '800', color: INK, marginBottom: 6 },
-    resultSub: { fontSize: 13, color: MUTED, textAlign: 'center', lineHeight: 18, marginBottom: 20 },
-    resultBtnSuccess: {
+    resultContainer: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 28,
+    },
+    successIconCircle: {
+        width: 84,
+        height: 84,
+        borderRadius: 42,
+        backgroundColor: SUCCESS,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 20,
+        shadowColor: SUCCESS,
+        shadowOpacity: 0.35,
+        shadowRadius: 12,
+        elevation: 6,
+    },
+    dangerIconCircle: {
+        width: 84,
+        height: 84,
+        borderRadius: 42,
+        backgroundColor: DANGER,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 20,
+        shadowColor: DANGER,
+        shadowOpacity: 0.35,
+        shadowRadius: 12,
+        elevation: 6,
+    },
+    resultTitle: {
+        fontSize: 22,
+        fontWeight: '800',
+        color: INK,
+        marginBottom: 8,
+    },
+    resultSubtitle: {
+        fontSize: 13,
+        color: MUTED,
+        textAlign: 'center',
+        lineHeight: 19,
+        marginBottom: 24,
+    },
+    receiptSummaryBox: {
+        width: '100%',
+        backgroundColor: SUCCESS_SOFT,
+        borderRadius: 16,
+        padding: 20,
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#A7F3D0',
+        marginBottom: 28,
+    },
+    summaryLabel: { fontSize: 12, fontWeight: '600', color: SUCCESS },
+    summaryAmount: { fontSize: 32, fontWeight: '800', color: SUCCESS, marginVertical: 4 },
+    summaryStore: { fontSize: 14, fontWeight: '700', color: INK, marginTop: 4 },
+    summaryRef: { fontSize: 11, color: MUTED, marginTop: 2 },
+
+    actionBtnSuccess: {
+        width: '100%',
         backgroundColor: GOLD,
-        paddingHorizontal: 22,
-        paddingVertical: 13,
-        borderRadius: 12,
+        paddingVertical: 15,
+        borderRadius: 14,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        elevation: 2,
+    },
+    actionBtnSuccessText: { color: '#412402', fontSize: 15, fontWeight: '800' },
+
+    failedNoticeBox: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 8,
-    },
-    resultBtnSuccessText: { color: '#412402', fontSize: 14, fontWeight: '800' },
-    resultBtnRetry: {
-        backgroundColor: BG,
-        paddingHorizontal: 22,
+        backgroundColor: DANGER_SOFT,
+        paddingHorizontal: 16,
         paddingVertical: 12,
         borderRadius: 12,
+        marginBottom: 28,
+        borderWidth: 1,
+        borderColor: '#FECACA',
     },
-    resultBtnRetryText: { color: BODY, fontSize: 13, fontWeight: '700' },
+    failedNoticeText: { fontSize: 12, color: DANGER, fontWeight: '600' },
+
+    retryBtn: {
+        width: '100%',
+        backgroundColor: TEAL,
+        paddingVertical: 15,
+        borderRadius: 14,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+    },
+    retryBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
 });
