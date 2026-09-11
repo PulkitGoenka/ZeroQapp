@@ -226,3 +226,9 @@ export const initiateCashPayment = () =>
 /** Get payment history */
 export const getPaymentHistory = (page = 0, size = 20) =>
     apiFetch(`/api/v1/payment/history?page=${page}&size=${size}`);
+/** Verify Razorpay online payment signature */
+export const verifyRazorpayPayment = (payload) =>
+    apiFetch('/api/v1/payment/verify-razorpay', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+    });

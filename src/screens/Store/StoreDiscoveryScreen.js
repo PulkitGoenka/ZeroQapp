@@ -129,10 +129,16 @@ export default function StoreDiscoveryScreen({ navigation }) {
     const val = tab === 0 ? pincode : tab === 1 ? district : state;
     const setVal = tab === 0 ? setPincode : tab === 1 ? setDistrict : setState;
 
+    // Input focus par target Y-coordinate par scroll karega
     const handleInputFocus = () => {
         setTimeout(() => {
-            scrollRef.current?.scrollToEnd({ animated: true });
-        }, 200);
+            if (scrollRef.current && finderY.current > 0) {
+                scrollRef.current.scrollTo({
+                    y: finderY.current + 80,
+                    animated: true,
+                });
+            }
+        }, 300);
     };
 
     const search = async () => {
@@ -296,7 +302,7 @@ export default function StoreDiscoveryScreen({ navigation }) {
                     ref={scrollRef}
                     contentContainerStyle={[
                         styles.scroll,
-                        { paddingBottom: keyboardHeight > 0 ? keyboardHeight + 40 : 60 }
+                        { paddingBottom: keyboardHeight > 0 ? 350 : 60 }
                     ]}
                     keyboardShouldPersistTaps="handled"
                     showsVerticalScrollIndicator={false}

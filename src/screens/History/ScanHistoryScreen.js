@@ -39,7 +39,6 @@ export default function ScanHistoryScreen({ navigation }) {
     const [addingBarcode, setAddingBarcode] = useState(null);
 
     const fetchScanLog = useCallback(async () => {
-        // Agar active shopping session nahi hai toh scan log empty dikhega
         if (!session) {
             setItems([]);
             setLoading(false);
@@ -49,14 +48,21 @@ export default function ScanHistoryScreen({ navigation }) {
 
         try {
             const res = await getScanHistory();
-            const list = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
 
+            // Backend ApiResponse wrapper handle karein (res.data.data ya res.data)
+            const raw = res?.data?.data !== undefined ? res?.data?.data : (res?.data !== undefined ? res?.data : res);
+            const list = Array.isArray(raw) ? raw : [];
+
+            // Unique items filter karein
             const uniqueMap = new Map();
             list.forEach(item => {
-                if (item.barcode && !uniqueMap.has(item.barcode)) {
+                if (item?.barcode && !uniqueMap.has(item.barcode)) {
                     uniqueMap.set(item.barcode, item);
                 }
             });
+
+            // ✅ YEH LINE MISSING THI:
+            setItems(Array.from(uniqueMap.values()));
         } catch (e) {
             console.log('Scan history error:', e.message);
             setItems([]);

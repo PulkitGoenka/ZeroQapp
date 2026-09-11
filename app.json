@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "ZeroQApp",
-    "slug": "ZeroQApp",
+    "name": "ITS3LF",
+    "slug": "its3lf",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
@@ -15,13 +15,8 @@
       "expo-camera",
       "expo-font"
     ],
-    "extra": {
-      "eas": {
-        "projectId": "ed248872-f5fe-4763-8e13-2858a4e5a2c2"
-      }
-    },
     "android": {
-      "package": "com.pulkitgoenka.ZeroQApp",
+      "package": "com.its3lf.app",
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO"
@@ -30,11 +25,11 @@
     "runtimeVersion": {
       "policy": "appVersion"
     },
-    "updates": {
-      "url": "https://u.expo.dev/ed248872-f5fe-4763-8e13-2858a4e5a2c2",
-      "enabled": true,
-      "checkAutomatically": "ON_LOAD",
-      "fallbackToCacheTimeout": 0
-    }
+    "extra": {
+      "eas": {
+        "projectId": "12f32bdf-d0c2-4890-987b-2c85f1670816"
+      }
+    },
+    "owner": "pulkitgoenka"
   }
 }

@@ -7,16 +7,13 @@ import {
   ActivityIndicator,
   StatusBar,
   BackHandler,
-  Dimensions,
+  Image,
+  ScrollView,
 } from 'react-native';
 import { Feather as Icon } from '@expo/vector-icons';
-import Barcode from 'react-native-barcode-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../store/AuthContext';
 import { getPaymentStatus, endSession } from '../../services/api';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const BARCODE_MAX_WIDTH = Math.min(SCREEN_WIDTH - 80, 280);
 
 const TEAL = '#4E989E';
 const TEAL_SOFT = '#EAF5F5';
@@ -33,7 +30,7 @@ const SUCCESS_SOFT = '#ECFDF5';
 const POLL_INTERVAL = 2000;
 
 export default function PaymentQrScreen({ navigation, route }) {
-  const { orderId, totalAmount } = route.params || {};
+  const { orderId, totalAmount, qrImageBase64 } = route.params || {};
   const { clearSession } = useAuth();
   const [status, setStatus] = useState('PENDING');
   const pollRef = useRef(null);
@@ -72,7 +69,7 @@ export default function PaymentQrScreen({ navigation, route }) {
     pollRef.current = setInterval(async () => {
       try {
         const res = await getPaymentStatus(orderId);
-        const current = res.data?.status || res?.status;
+        const current = res?.data?.status || res?.status;
 
         if (current && current !== status) {
           setStatus(current);
@@ -107,7 +104,7 @@ export default function PaymentQrScreen({ navigation, route }) {
             <View style={styles.receiptBox}>
               <Text style={styles.receiptLabel}>Total Paid</Text>
               <Text style={styles.amountDisplay}>₹{totalAmount || 0}</Text>
-              <Text style={styles.receiptId}>Order Ref: {orderId}</Text>
+              <Text style={styles.receiptId}>Order Ref: {orderId ? String(orderId).substring(0, 8).toUpperCase() : 'N/A'}</Text>
             </View>
 
             <TouchableOpacity
@@ -123,7 +120,10 @@ export default function PaymentQrScreen({ navigation, route }) {
     );
   }
 
-  const barcodeValue = String(orderId || 'ORDER-PENDING');
+  // Base64 URI formatting
+  const qrUri = qrImageBase64
+      ? (qrImageBase64.startsWith('data:image') ? qrImageBase64 : `data:image/png;base64,${qrImageBase64}`)
+      : null;
 
   return (
       <SafeAreaView style={styles.flex} edges={['top', 'bottom']}>
@@ -138,48 +138,51 @@ export default function PaymentQrScreen({ navigation, route }) {
             <Icon name="arrow-left" size={20} color={INK} />
           </TouchableOpacity>
           <View style={styles.headerCenter}>
-            <Text style={styles.headerTitle}>Counter Checkout Barcode</Text>
-            <Text style={styles.headerSub}>Present this tag to cashier</Text>
+            <Text style={styles.headerTitle}>Counter Checkout</Text>
+            <Text style={styles.headerSub}>Present this code to cashier</Text>
           </View>
           <View style={{ width: 38 }} />
         </View>
 
-        <View style={styles.content}>
+        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <View style={styles.amountBox}>
             <Text style={styles.amountLabel}>Amount Due at Counter</Text>
             <Text style={styles.amountVal}>₹{totalAmount || 0}</Text>
           </View>
 
-          {/* Barcode Card Constrained to Screen */}
-          <View style={styles.barcodeCard}>
-            <Text style={styles.barcodeHeader}>CASHIER SCAN TAG</Text>
-            <View style={styles.barcodeWrapper}>
-              <Barcode
-                  value={barcodeValue}
-                  format="CODE128"
-                  maxWidth={BARCODE_MAX_WIDTH}
-                  height={90}
-                  lineColor={INK}
-                  backgroundColor="#FFFFFF"
-              />
+          {/* Counter QR Card */}
+          <View style={styles.qrCard}>
+            <Text style={styles.qrHeader}>CASHIER SCAN TOKEN</Text>
+
+            <View style={styles.qrWrapper}>
+              {qrUri ? (
+                  <Image
+                      source={{ uri: qrUri }}
+                      style={styles.qrImage}
+                      resizeMode="contain"
+                  />
+              ) : (
+                  <ActivityIndicator size="large" color={TEAL} />
+              )}
             </View>
-            <Text style={styles.barcodeString} numberOfLines={1} ellipsizeMode="middle">
-              {barcodeValue}
+
+            <Text style={styles.orderRefText}>
+              REF: {orderId ? String(orderId).substring(0, 8).toUpperCase() : 'PENDING'}
             </Text>
           </View>
 
           <View style={styles.guideCard}>
             <Text style={styles.guideTitle}>Checkout Instructions</Text>
-            <Text style={styles.guideStep}>1. Show this barcode to cashier for instant gun scanner read.</Text>
-            <Text style={styles.guideStep}>2. Pay via Cash, Card, or UPI directly at the counter.</Text>
-            <Text style={styles.guideStep}>3. As soon as cashier submits, this screen will verify automatically.</Text>
+            <Text style={styles.guideStep}>1. Show this QR to the cashier counter.</Text>
+            <Text style={styles.guideStep}>2. Pay via Cash, Card, or UPI directly to the cashier.</Text>
+            <Text style={styles.guideStep}>3. Once cashier submits, this screen will verify automatically.</Text>
           </View>
 
           <View style={styles.waitingBadge}>
             <ActivityIndicator size="small" color={TEAL} />
-            <Text style={styles.waitingText}>Awaiting cashier counter scan & approval...</Text>
+            <Text style={styles.waitingText}>Awaiting cashier counter approval...</Text>
           </View>
-        </View>
+        </ScrollView>
       </SafeAreaView>
   );
 }
@@ -191,8 +194,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 14,
+    paddingVertical: 14,
     backgroundColor: CARD_BG,
     borderBottomWidth: 1,
     borderBottomColor: BORDER,
@@ -224,11 +226,11 @@ const styles = StyleSheet.create({
   amountLabel: { fontSize: 12, color: MUTED, fontWeight: '500' },
   amountVal: { fontSize: 26, fontWeight: '800', color: INK, marginTop: 2 },
 
-  barcodeCard: {
+  qrCard: {
     width: '100%',
     backgroundColor: CARD_BG,
     borderRadius: 18,
-    paddingVertical: 20,
+    paddingVertical: 24,
     paddingHorizontal: 16,
     alignItems: 'center',
     justifyContent: 'center',
@@ -238,32 +240,35 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 8,
     elevation: 2,
-    overflow: 'hidden',
   },
-  barcodeHeader: {
+  qrHeader: {
     fontSize: 11,
     fontWeight: '800',
     color: MUTED,
     letterSpacing: 1.2,
-    marginBottom: 12,
+    marginBottom: 16,
   },
-  barcodeWrapper: {
-    width: '100%',
-    paddingVertical: 12,
-    paddingHorizontal: 8,
+  qrWrapper: {
+    width: 220,
+    height: 220,
     backgroundColor: '#FFFFFF',
-    borderRadius: 10,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
+    padding: 10,
+    borderWidth: 1,
+    borderColor: BORDER,
   },
-  barcodeString: {
+  qrImage: {
+    width: '100%',
+    height: '100%',
+  },
+  orderRefText: {
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '800',
     letterSpacing: 1,
     color: INK,
-    marginTop: 10,
-    maxWidth: '90%',
-    textAlign: 'center',
+    marginTop: 14,
   },
 
   guideCard: {
@@ -278,7 +283,7 @@ const styles = StyleSheet.create({
   guideTitle: { fontSize: 13, fontWeight: '800', color: TEAL, marginBottom: 4 },
   guideStep: { fontSize: 12, color: BODY, lineHeight: 18 },
 
-  waitingBadge: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 },
+  waitingBadge: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4, marginBottom: 20 },
   waitingText: { fontSize: 12, color: MUTED, fontWeight: '600' },
 
   centerBox: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 28 },
