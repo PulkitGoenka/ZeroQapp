@@ -121,18 +121,21 @@ export default function OnlineCheckoutScreen({ navigation }) {
             RazorpayCheckout.open(options)
                 .then(async (data) => {
                     // Success callback from SDK
-                    // { razorpay_payment_id, razorpay_order_id, razorpay_signature }
+                    // data contains: razorpay_payment_id, razorpay_order_id, razorpay_signature
                     try {
-                        const verifyRes = await verifyRazorpayPayment({
+                        const payload = {
                             orderId: initData.orderId,
                             razorpayPaymentId: data.razorpay_payment_id,
                             razorpayOrderId: data.razorpay_order_id,
                             razorpaySignature: data.razorpay_signature,
-                        });
+                        };
+
+                        const verifyRes = await verifyRazorpayPayment(payload);
                         setVerifiedBill(verifyRes?.data || verifyRes);
                         setPaymentState('SUCCESS');
                     } catch (err) {
-                        Alert.alert('Verification Issue', 'Payment succeeded but signature check failed. Please contact counter.');
+                        console.error('Backend signature verification error:', err?.message || err);
+                        Alert.alert('Verification Issue', err?.message || 'Payment succeeded but signature check failed. Please contact counter.');
                         setPaymentState('FAILED');
                     }
                 })
