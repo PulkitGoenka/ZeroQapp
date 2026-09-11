@@ -50,7 +50,13 @@ export default function ScanHistoryScreen({ navigation }) {
         try {
             const res = await getScanHistory();
             const list = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
-            setItems(list);
+
+            const uniqueMap = new Map();
+            list.forEach(item => {
+                if (item.barcode && !uniqueMap.has(item.barcode)) {
+                    uniqueMap.set(item.barcode, item);
+                }
+            });
         } catch (e) {
             console.log('Scan history error:', e.message);
             setItems([]);

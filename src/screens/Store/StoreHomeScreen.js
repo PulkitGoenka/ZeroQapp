@@ -141,9 +141,6 @@ export default function StoreHomeScreen({ navigation }) {
                             <View style={styles.pulsingDot} />
                             <Text style={styles.sessionStatusLabel}>ACTIVE SHOPPING SESSION</Text>
                         </View>
-                        <View style={styles.storeIdBadge}>
-                            <Text style={styles.storeIdText}>ID: {session.storeId || 'N/A'}</Text>
-                        </View>
                     </View>
 
                     <Text style={styles.storeNameText}>{session.storeName || 'Local Supermarket'}</Text>

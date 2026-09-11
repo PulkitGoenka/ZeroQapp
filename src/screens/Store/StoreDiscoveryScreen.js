@@ -50,7 +50,7 @@ export default function StoreDiscoveryScreen({ navigation }) {
     const [searching, setSearching] = useState(false);
     const [hasSearched, setHasSearched] = useState(false);
     const [starting, setStarting] = useState(null);
-    const [keyboardVisible, setKeyboardVisible] = useState(false);
+    const [keyboardHeight, setKeyboardHeight] = useState(0);
 
     // Session Switch / Exit Dialog State
     const [dialogState, setDialogState] = useState({
@@ -71,14 +71,15 @@ export default function StoreDiscoveryScreen({ navigation }) {
     useEffect(() => {
         loadBrands();
 
-        const showSub = Keyboard.addListener(
-            Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
-            () => setKeyboardVisible(true)
-        );
-        const hideSub = Keyboard.addListener(
-            Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
-            () => setKeyboardVisible(false)
-        );
+        const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+        const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+        const showSub = Keyboard.addListener(showEvent, (e) => {
+            setKeyboardHeight(e.endCoordinates.height);
+        });
+        const hideSub = Keyboard.addListener(hideEvent, () => {
+            setKeyboardHeight(0);
+        });
 
         return () => {
             showSub.remove();
@@ -128,13 +129,10 @@ export default function StoreDiscoveryScreen({ navigation }) {
     const val = tab === 0 ? pincode : tab === 1 ? district : state;
     const setVal = tab === 0 ? setPincode : tab === 1 ? setDistrict : setState;
 
-    const scrollToInput = () => {
+    const handleInputFocus = () => {
         setTimeout(() => {
-            scrollRef.current?.scrollTo({
-                y: Math.max(0, finderY.current + 80),
-                animated: true
-            });
-        }, 100);
+            scrollRef.current?.scrollToEnd({ animated: true });
+        }, 200);
     };
 
     const search = async () => {
@@ -270,7 +268,6 @@ export default function StoreDiscoveryScreen({ navigation }) {
             <KeyboardAvoidingView
                 style={styles.flex}
                 behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-                keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0}
             >
                 {/* Header */}
                 <View style={styles.header}>
@@ -299,7 +296,7 @@ export default function StoreDiscoveryScreen({ navigation }) {
                     ref={scrollRef}
                     contentContainerStyle={[
                         styles.scroll,
-                        keyboardVisible && { paddingBottom: 280 }
+                        { paddingBottom: keyboardHeight > 0 ? keyboardHeight + 40 : 60 }
                     ]}
                     keyboardShouldPersistTaps="handled"
                     showsVerticalScrollIndicator={false}
@@ -453,7 +450,7 @@ export default function StoreDiscoveryScreen({ navigation }) {
                                 value={val}
                                 onChangeText={setVal}
                                 autoCapitalize={tab === 0 ? 'none' : 'words'}
-                                onFocus={scrollToInput}
+                                onFocus={handleInputFocus}
                             />
 
                             <TouchableOpacity
@@ -597,7 +594,7 @@ const styles = StyleSheet.create({
     },
     headerTitle: { fontSize: 18, fontWeight: '800', color: INK },
     headerSub: { fontSize: 12, color: MUTED, marginTop: 2, fontWeight: '500' },
-    scroll: { paddingHorizontal: 20, paddingBottom: 60 },
+    scroll: { paddingHorizontal: 20 },
 
     activeSessionCard: {
         backgroundColor: '#FFFFFF',
