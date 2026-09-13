@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -6,147 +6,58 @@ import {
   StyleSheet,
   ActivityIndicator,
   StatusBar,
-  BackHandler,
-  ScrollView,
-  Dimensions,
+  Alert,
 } from 'react-native';
 import { Feather as Icon } from '@expo/vector-icons';
-import Barcode from 'react-native-barcode-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../store/AuthContext';
-import { getPaymentStatus, endSession } from '../../services/api';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const BARCODE_INNER_WIDTH = Math.min(SCREEN_WIDTH - 80, 260);
+import { initiateCashPayment } from '../../services/api';
 
 const TEAL = '#4E989E';
 const TEAL_SOFT = '#EAF5F5';
-const GOLD = '#F7B32B';
 const BG = '#F5FAFA';
 const INK = '#111827';
 const BODY = '#374151';
 const MUTED = '#6B7280';
 const BORDER = '#E5E7EB';
 const CARD_BG = '#FFFFFF';
-const SUCCESS = '#059669';
-const SUCCESS_SOFT = '#ECFDF5';
 
-const POLL_INTERVAL = 2000;
+export default function PaymentScreen({ navigation }) {
+  const { session } = useAuth();
+  const [loadingCash, setLoadingCash] = useState(false);
 
-export default function PaymentQrScreen({ navigation, route }) {
-  const { orderId, totalAmount, qrToken, counterQrToken } = route.params || {};
-  const { clearSession } = useAuth();
-  const [status, setStatus] = useState('PENDING');
-  const pollRef = useRef(null);
-
-  // Clean barcode string for standard CODE128 scanning
-  const rawValue = counterQrToken || qrToken || orderId || 'CTR00000000';
-  const cleanString = String(rawValue).replace(/[^a-zA-Z0-9]/g, '');
-  const barcodeValue = (cleanString.length > 12 ? cleanString.substring(0, 12) : cleanString).toUpperCase() || 'CTR00000000';
-
-  const finalizeSessionAndExit = useCallback(async () => {
-    if (pollRef.current) clearInterval(pollRef.current);
-    endSession().catch(() => {});
+  const handleCashSelect = async () => {
+    setLoadingCash(true);
     try {
-      await clearSession();
-    } catch (e) {}
+      const res = await initiateCashPayment();
 
-    // Seedha MainTabs par reset
-    try {
-      navigation.reset({
-        index: 0,
-        routes: [{ name: 'MainTabs' }],
+      // Safe payload unwrap
+      const payload = res?.data?.data !== undefined ? res.data.data : (res?.data !== undefined ? res.data : res);
+
+      if (!payload) {
+        throw new Error('No response from payment server.');
+      }
+
+      navigation.navigate('PaymentQr', {
+        mode: 'cash',
+        orderId: payload.orderId,
+        counterQrToken: payload.counterQrToken || payload.qrToken || payload.orderId,
+        qrToken: payload.qrToken,
+        totalAmount: payload.totalAmount,
       });
-    } catch (e1) {
-      try {
-        navigation.navigate('MainTabs');
-      } catch (e2) {
-        navigation.popToTop();
-      }
+    } catch (e) {
+      console.log('Cash initiate error:', e?.response?.data || e.message);
+      Alert.alert('Payment Notice', e?.response?.data?.message || e.message || 'Unable to initiate counter checkout.');
+    } finally {
+      setLoadingCash(false);
     }
-  }, [clearSession, navigation]);
-
-  useEffect(() => {
-    const onBack = () => {
-      if (status === 'PAID' || status === 'VERIFIED' || status === 'SCANNED' || status === 'COMPLETED') {
-        finalizeSessionAndExit();
-        return true;
-      }
-      navigation.goBack();
-      return true;
-    };
-    const sub = BackHandler.addEventListener('hardwareBackPress', onBack);
-    return () => {
-      if (sub && typeof sub.remove === 'function') sub.remove();
-      else BackHandler.removeEventListener('hardwareBackPress', onBack);
-    };
-  }, [status, navigation, finalizeSessionAndExit]);
-
-  // Status Polling: Cashier system par barcode scan hote hi detect karega
-  useEffect(() => {
-    if (!orderId) return;
-
-    pollRef.current = setInterval(async () => {
-      try {
-        const res = await getPaymentStatus(orderId);
-        const current = res?.data?.data?.status || res?.data?.status || res?.status;
-
-        if (current && (current === 'SCANNED' || current === 'VERIFIED' || current === 'PAID' || current === 'COMPLETED')) {
-          clearInterval(pollRef.current);
-          setStatus(current);
-
-          // 1.5 seconds confirmation screen dikha kar direct MainTabs par redirect
-          setTimeout(async () => {
-            await finalizeSessionAndExit();
-          }, 1500);
-        }
-      } catch (e) {
-        console.log('Status polling note:', e.message);
-      }
-    }, POLL_INTERVAL);
-
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
-    };
-  }, [orderId, finalizeSessionAndExit]);
-
-  // ── CART VERIFIED / TRANSFERRED CONFIRMATION ──
-  if (status === 'PAID' || status === 'VERIFIED' || status === 'SCANNED' || status === 'COMPLETED') {
-    return (
-        <SafeAreaView style={styles.flex} edges={['top', 'bottom']}>
-          <StatusBar barStyle="dark-content" backgroundColor={BG} />
-          <View style={styles.centerBox}>
-            <View style={styles.successCircle}>
-              <Icon name="check" size={38} color="#FFFFFF" />
-            </View>
-            <Text style={styles.successTitle}>Cart Verified at Counter!</Text>
-            <Text style={styles.successSub}>
-              Your items have been transferred to the cashier counter POS. Please pay the cashier to collect your printed bill.
-            </Text>
-
-            <View style={styles.receiptBox}>
-              <Text style={styles.receiptLabel}>Total Bill Payable</Text>
-              <Text style={styles.amountDisplay}>₹{totalAmount || 0}</Text>
-              <Text style={styles.receiptId}>Counter Ref: {String(orderId || '').substring(0, 8).toUpperCase()}</Text>
-            </View>
-
-            <TouchableOpacity
-                style={styles.homeBtn}
-                onPress={finalizeSessionAndExit}
-                activeOpacity={0.85}
-            >
-              <Icon name="home" size={17} color="#412402" />
-              <Text style={styles.homeBtnText}>Go to Home</Text>
-            </TouchableOpacity>
-          </View>
-        </SafeAreaView>
-    );
-  }
+  };
 
   return (
-      <SafeAreaView style={styles.flex} edges={['top', 'bottom']}>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
         <StatusBar barStyle="dark-content" backgroundColor={CARD_BG} />
 
+        {/* Top Header */}
         <View style={styles.header}>
           <TouchableOpacity
               onPress={() => navigation.goBack()}
@@ -155,64 +66,87 @@ export default function PaymentQrScreen({ navigation, route }) {
           >
             <Icon name="arrow-left" size={20} color={INK} />
           </TouchableOpacity>
+
           <View style={styles.headerCenter}>
-            <Text style={styles.headerTitle}>Counter Checkout</Text>
-            <Text style={styles.headerSub}>Present barcode to cashier</Text>
-          </View>
-          <View style={{ width: 38 }} />
-        </View>
-
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-          <View style={styles.amountBox}>
-            <Text style={styles.amountLabel}>Payable Amount</Text>
-            <Text style={styles.amountVal}>₹{totalAmount || 0}</Text>
-          </View>
-
-          {/* Constrained Barcode Card */}
-          <View style={styles.barcodeCard}>
-            <Text style={styles.barcodeHeader}>CASHIER SCAN BARCODE</Text>
-
-            <View style={styles.barcodeWrapper}>
-              <Barcode
-                  value={barcodeValue}
-                  format="CODE128"
-                  maxWidth={BARCODE_INNER_WIDTH}
-                  height={85}
-                  lineColor={INK}
-                  backgroundColor="#FFFFFF"
-                  onError={(err) => console.log('Barcode render error:', err)}
-              />
-            </View>
-
-            <Text style={styles.barcodeString} numberOfLines={1}>
-              {barcodeValue}
+            <Text style={styles.headerTitle}>Select Payment Type</Text>
+            <Text style={styles.headerSub} numberOfLines={1}>
+              {session?.storeName || 'Store Checkout'}
             </Text>
           </View>
 
-          <View style={styles.guideCard}>
-            <Text style={styles.guideTitle}>Counter Instructions</Text>
-            <Text style={styles.guideStep}>1. Show this barcode to cashier gun scanner.</Text>
-            <Text style={styles.guideStep}>2. Your cart transfers directly to the cashier's screen.</Text>
-            <Text style={styles.guideStep}>3. Pay cashier by Cash, Card or UPI and take your invoice.</Text>
+          <View style={{ width: 38 }} />
+        </View>
+
+        {/* Content Container */}
+        <View style={styles.container}>
+          <View style={styles.introBox}>
+            <Text style={styles.promptTitle}>How would you like to pay?</Text>
+            <Text style={styles.promptSub}>
+              Pay digitally on your phone to exit immediately, or visit the cashier counter to pay by cash/card.
+            </Text>
           </View>
 
-          <View style={styles.waitingBadge}>
-            <ActivityIndicator size="small" color={TEAL} />
-            <Text style={styles.waitingText}>Waiting for cashier to scan...</Text>
-          </View>
-        </ScrollView>
+          {/* Option A: Pay Online */}
+          <TouchableOpacity
+              style={styles.card}
+              onPress={() => navigation.navigate('OnlineCheckout')}
+              activeOpacity={0.85}
+          >
+            <View style={[styles.iconBox, { backgroundColor: TEAL_SOFT }]}>
+              <Icon name="smartphone" size={22} color={TEAL} />
+            </View>
+            <View style={styles.cardBody}>
+              <View style={styles.badgeRow}>
+                <Text style={styles.cardTitle}>Pay Online</Text>
+                <View style={styles.recomPill}>
+                  <Text style={styles.recomText}>FAST EXIT</Text>
+                </View>
+              </View>
+              <Text style={styles.cardSub}>UPI, Cards, Netbanking & Wallets</Text>
+              <Text style={styles.bullet}>• Pay directly inside the app</Text>
+              <Text style={styles.bullet}>• Generates instant gate exit pass</Text>
+            </View>
+            <Icon name="chevron-right" size={18} color={TEAL} />
+          </TouchableOpacity>
+
+          {/* Option B: Pay at Counter */}
+          <TouchableOpacity
+              style={styles.card}
+              onPress={handleCashSelect}
+              disabled={loadingCash}
+              activeOpacity={0.85}
+          >
+            <View style={[styles.iconBox, { backgroundColor: '#FEF3C7' }]}>
+              <Icon name="credit-card" size={22} color="#D97706" />
+            </View>
+            <View style={styles.cardBody}>
+              <Text style={styles.cardTitle}>Pay at Counter</Text>
+              <Text style={styles.cardSub}>Cash or card swipe at billing desk</Text>
+              <Text style={styles.bullet}>• Generates cashier transfer barcode</Text>
+              <Text style={styles.bullet}>• Collect printed bill directly from cashier</Text>
+            </View>
+            {loadingCash ? (
+                <ActivityIndicator size="small" color="#D97706" />
+            ) : (
+                <Icon name="chevron-right" size={18} color="#D97706" />
+            )}
+          </TouchableOpacity>
+        </View>
       </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: BG },
+  safeArea: {
+    flex: 1,
+    backgroundColor: BG,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingVertical: 12,
     backgroundColor: CARD_BG,
     borderBottomWidth: 1,
     borderBottomColor: BORDER,
@@ -227,119 +161,95 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: BORDER,
   },
-  headerCenter: { alignItems: 'center' },
-  headerTitle: { fontSize: 16, fontWeight: '800', color: INK },
-  headerSub: { fontSize: 12, color: MUTED, marginTop: 1 },
-
-  content: { padding: 20, alignItems: 'center', gap: 16 },
-  amountBox: {
+  headerCenter: {
+    flex: 1,
+    alignItems: 'center',
+    marginHorizontal: 8,
+  },
+  headerTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: INK,
+  },
+  headerSub: {
+    fontSize: 12,
+    color: MUTED,
+    marginTop: 1,
+  },
+  container: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingTop: 24,
+    gap: 16,
+  },
+  introBox: {
+    marginBottom: 6,
+  },
+  promptTitle: {
+    fontSize: 19,
+    fontWeight: '800',
+    color: INK,
+  },
+  promptSub: {
+    fontSize: 13,
+    color: MUTED,
+    lineHeight: 18,
+    marginTop: 4,
+  },
+  card: {
     backgroundColor: CARD_BG,
     borderRadius: 16,
-    padding: 16,
-    alignItems: 'center',
-    width: '100%',
-    borderWidth: 1,
-    borderColor: BORDER,
-  },
-  amountLabel: { fontSize: 12, color: MUTED, fontWeight: '500' },
-  amountVal: { fontSize: 26, fontWeight: '800', color: INK, marginTop: 2 },
-
-  barcodeCard: {
-    width: '100%',
-    backgroundColor: CARD_BG,
-    borderRadius: 18,
-    paddingVertical: 22,
-    paddingHorizontal: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
+    padding: 18,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 14,
     borderWidth: 1,
     borderColor: BORDER,
     elevation: 2,
-    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
   },
-  barcodeHeader: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: MUTED,
-    letterSpacing: 1.2,
-    marginBottom: 14,
-  },
-  barcodeWrapper: {
-    width: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
-    paddingVertical: 10,
-    overflow: 'hidden',
-  },
-  barcodeString: {
-    fontSize: 14,
-    fontWeight: '800',
-    letterSpacing: 2,
-    color: INK,
-    marginTop: 12,
-    textAlign: 'center',
-  },
-
-  guideCard: {
-    backgroundColor: TEAL_SOFT,
-    borderRadius: 16,
-    padding: 16,
-    width: '100%',
-    borderWidth: 1,
-    borderColor: '#B6DCDC',
-    gap: 4,
-  },
-  guideTitle: { fontSize: 13, fontWeight: '800', color: TEAL, marginBottom: 4 },
-  guideStep: { fontSize: 12, color: BODY, lineHeight: 18 },
-
-  waitingBadge: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4, marginBottom: 20 },
-  waitingText: { fontSize: 12, color: MUTED, fontWeight: '600' },
-
-  centerBox: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 28 },
-  successCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: SUCCESS,
+  iconBox: {
+    width: 46,
+    height: 46,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
-    elevation: 4,
   },
-  successTitle: { fontSize: 22, fontWeight: '800', color: INK, marginBottom: 6 },
-  successSub: {
-    fontSize: 13,
-    color: MUTED,
-    textAlign: 'center',
-    lineHeight: 19,
-    marginBottom: 20,
-    paddingHorizontal: 12,
+  cardBody: {
+    flex: 1,
   },
-  receiptBox: {
-    backgroundColor: SUCCESS_SOFT,
-    borderRadius: 14,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    alignItems: 'center',
-    width: '100%',
-    marginBottom: 24,
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
-  },
-  receiptLabel: { fontSize: 12, fontWeight: '600', color: SUCCESS },
-  amountDisplay: { fontSize: 32, fontWeight: '800', color: SUCCESS, marginVertical: 4 },
-  receiptId: { fontSize: 11, color: MUTED, fontWeight: '600' },
-
-  homeBtn: {
-    backgroundColor: GOLD,
-    paddingHorizontal: 30,
-    paddingVertical: 15,
-    borderRadius: 14,
+  badgeRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    elevation: 2,
+    marginBottom: 2,
   },
-  homeBtnText: { color: '#412402', fontSize: 14, fontWeight: '800' },
+  cardTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: INK,
+  },
+  recomPill: {
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  recomText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#059669',
+  },
+  cardSub: {
+    fontSize: 12,
+    color: MUTED,
+    marginBottom: 6,
+  },
+  bullet: {
+    fontSize: 11,
+    color: BODY,
+    lineHeight: 16,
+  },
 });
