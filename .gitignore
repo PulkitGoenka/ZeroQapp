@@ -29,6 +29,7 @@ expo-env.d.ts
 # Env / secrets
 .env
 .env.local
+*.env
 
 # EAS
 .eas/
@@ -36,3 +37,4 @@ expo-env.d.ts
 # IDE
 .idea/
 .vscode/
+

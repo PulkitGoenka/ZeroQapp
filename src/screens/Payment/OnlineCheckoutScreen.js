@@ -53,23 +53,22 @@ export default function OnlineCheckoutScreen({ navigation }) {
         })();
     }, [navigation]);
 
+    // Handle session teardown and go to actual App Home
     const handleCompleteAndGoHome = useCallback(async () => {
         endSession().catch(() => {});
         try {
             await clearSession();
         } catch (e) {}
 
+        // 1. Root level MainTabs par navigate/reset karein
         try {
             navigation.reset({
                 index: 0,
-                routes: [{ name: 'StoreDiscovery' }],
+                routes: [{ name: 'MainTabs' }],
             });
         } catch (err1) {
             try {
-                navigation.reset({
-                    index: 0,
-                    routes: [{ name: 'MainTabs' }],
-                });
+                navigation.navigate('MainTabs');
             } catch (err2) {
                 navigation.popToTop();
             }
@@ -79,6 +78,7 @@ export default function OnlineCheckoutScreen({ navigation }) {
     useEffect(() => {
         const onBackPress = () => {
             if (paymentState === 'SUCCESS') {
+                // Success screen par phone ka hardware back button bhi App Home par bhejega
                 handleCompleteAndGoHome();
                 return true;
             }

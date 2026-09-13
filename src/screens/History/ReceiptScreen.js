@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 import {
     View,
     Text,
@@ -9,9 +9,13 @@ import {
     Modal,
     StatusBar,
     Share,
-    ActivityIndicator,
+    Dimensions,
 } from 'react-native';
 import { Feather as Icon } from '@expo/vector-icons';
+import Barcode from 'react-native-barcode-svg';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const BARCODE_INNER_WIDTH = Math.min(SCREEN_WIDTH - 80, 260);
 
 const TEAL = '#4E989E';
 const TEAL_SOFT = '#EAF5F5';
@@ -52,18 +56,27 @@ const formatDateOnly = (iso) => {
 
 export default function ReceiptScreen({ route, navigation }) {
     const initialBill = route?.params?.bill || {};
-    const [bill, setBill] = useState(initialBill);
+    const [bill] = useState(initialBill);
     const [zoomImage, setZoomImage] = useState(null);
 
-    // Security gate exit verification state
+    // 1. Payment Method Detection
+    const paymentMethod = (bill.paymentMethod || bill.mode || '').toUpperCase();
+    const isCashPayment = paymentMethod === 'CASH' || paymentMethod === 'COUNTER';
+
+    // 2. One-Time Security Gate Exit Verification State
     const isExitVerified = Boolean(bill.isExitVerified || bill.exitVerifiedAt || bill.verifiedAt);
     const verifiedTime = bill.exitVerifiedAt || bill.verifiedAt;
+
+    // 3. Gate Barcode String (Only for Online payment)
+    const rawExitToken = bill.exitQrToken || bill.qrToken || bill.billRef || bill.orderId || 'EXIT00000000';
+    const cleanExitString = String(rawExitToken).replace(/[^a-zA-Z0-9]/g, '');
+    const exitBarcodeValue = (cleanExitString.length > 12 ? cleanExitString.substring(0, 12) : cleanExitString).toUpperCase() || 'EXIT00000000';
 
     const items = bill.items && bill.items.length > 0
         ? bill.items
         : [
             {
-                productName: 'General Store Purchases',
+                productName: 'Store Item Purchases',
                 quantity: bill.itemCount || 1,
                 price: bill.totalAmount || 0,
                 imageUrl: null,
@@ -74,15 +87,13 @@ export default function ReceiptScreen({ route, navigation }) {
     const totalUnitsCount = items.reduce((acc, curr) => acc + (Number(curr.quantity) || 1), 0);
     const uniqueItemCount = items.length;
 
-    const rawStatus = (bill.status || bill.paymentStatus || (bill.paidAt ? 'SUCCESS' : 'PENDING')).toUpperCase();
+    const rawStatus = (bill.status || bill.paymentStatus || (bill.paidAt ? 'SUCCESS' : 'PAID')).toUpperCase();
     const isSuccess = rawStatus === 'SUCCESS' || rawStatus === 'PAID' || rawStatus === 'COMPLETED';
-    const isFailed = rawStatus === 'FAILED';
-    const isCash = (bill.paymentMethod || '').toUpperCase() === 'CASH';
 
     const handleShareInvoice = async () => {
         try {
             await Share.share({
-                message: `Tax Invoice #${bill.billRef || 'N/A'}\nStore: ${bill.storeName || 'Supermarket'}\nAmount Paid: ${fmt(bill.totalAmount)}\nPayment: ${isSuccess ? 'Verified' : rawStatus}\nGate Exit Pass: ${isExitVerified ? 'Already Verified & Closed' : 'Active Pass'}\nTime: ${formatTimeOnly(bill.paidAt)} on ${formatDateOnly(bill.paidAt)}`,
+                message: `Tax Invoice #${bill.billRef || 'N/A'}\nStore: ${bill.storeName || 'Supermarket'}\nAmount Paid: ${fmt(bill.totalAmount)}\nPayment Mode: ${isCashPayment ? 'Counter Cash Desk' : 'Online UPI/Card'}\nStatus: ${isSuccess ? 'Paid & Settled' : rawStatus}`,
             });
         } catch (e) {
             console.log('Share error:', e.message);
@@ -93,7 +104,7 @@ export default function ReceiptScreen({ route, navigation }) {
         <View style={styles.flex}>
             <StatusBar barStyle="dark-content" backgroundColor={CARD_BG} />
 
-            {/* Top Header */}
+            {/* Header */}
             <View style={styles.header}>
                 <TouchableOpacity
                     onPress={() => navigation.goBack()}
@@ -119,57 +130,52 @@ export default function ReceiptScreen({ route, navigation }) {
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
 
-                {/* 1. Payment Status Hero Banner */}
+                {/* Status Hero Card */}
                 <View style={styles.statusCard}>
-                    <View style={[
-                        styles.statusIconCircle,
-                        isSuccess ? styles.bgSuccess : isFailed ? styles.bgDanger : styles.bgWarning,
-                    ]}>
-                        <Icon
-                            name={isSuccess ? 'check' : isFailed ? 'x' : 'clock'}
-                            size={24}
-                            color="#FFFFFF"
-                        />
+                    <View style={[styles.statusIconCircle, isSuccess ? styles.bgSuccess : styles.bgDanger]}>
+                        <Icon name={isSuccess ? 'check' : 'x'} size={24} color="#FFFFFF" />
                     </View>
 
                     <Text style={styles.statusTitle}>
-                        {isSuccess ? 'Payment Successful' : isFailed ? 'Payment Failed' : 'Payment Processing'}
+                        {isSuccess ? 'Payment Settled' : 'Payment Pending'}
                     </Text>
                     <Text style={styles.statusSub}>
-                        {isSuccess
-                            ? 'Transaction verified & settled in full'
-                            : isFailed
-                                ? 'Transaction could not be completed'
-                                : 'Awaiting confirmation from bank'}
+                        {isCashPayment
+                            ? 'Billed & collected by counter cashier'
+                            : 'Verified online payment with instant invoice'}
                     </Text>
 
                     <Text style={styles.totalAmountText}>{fmt(bill.totalAmount)}</Text>
 
                     <View style={styles.statusPillsRow}>
                         <View style={[styles.pillBadge, { backgroundColor: '#F3F4F6' }]}>
-                            <Icon name={isCash ? 'dollar-sign' : 'credit-card'} size={12} color={BODY} />
-                            <Text style={styles.pillText}>{isCash ? 'Cash Desk' : 'Online Payment'}</Text>
+                            <Icon name={isCashPayment ? 'dollar-sign' : 'credit-card'} size={12} color={BODY} />
+                            <Text style={styles.pillText}>{isCashPayment ? 'Cash Desk' : 'Online Payment'}</Text>
                         </View>
 
-                        <View style={[
-                            styles.pillBadge,
-                            isSuccess ? { backgroundColor: SUCCESS_SOFT } : { backgroundColor: DANGER_SOFT },
-                        ]}>
-                            <Icon
-                                name={isSuccess ? 'check-circle' : 'alert-circle'}
-                                size={12}
-                                color={isSuccess ? SUCCESS : DANGER}
-                            />
-                            <Text style={[styles.pillText, { color: isSuccess ? SUCCESS : DANGER, fontWeight: '800' }]}>
+                        <View style={[styles.pillBadge, { backgroundColor: SUCCESS_SOFT }]}>
+                            <Icon name="check-circle" size={12} color={SUCCESS} />
+                            <Text style={[styles.pillText, { color: SUCCESS, fontWeight: '800' }]}>
                                 {rawStatus}
                             </Text>
                         </View>
                     </View>
                 </View>
 
-                {/* 2. Security Gate Pass (One-Time Verification Logic) */}
-                {isExitVerified ? (
-                    // State B: Already Scanned & Verified State
+                {/* ── SECURITY EXIT GATE PASS LOGIC ── */}
+                {isCashPayment ? (
+                    // 1. CASH BILL: No Barcode, Simple Verification Box
+                    <View style={styles.cashNoticeBox}>
+                        <View style={styles.cashNoticeHeader}>
+                            <Icon name="file-text" size={16} color={TEAL} />
+                            <Text style={styles.cashNoticeTitle}>Counter Cashier Receipt</Text>
+                        </View>
+                        <Text style={styles.cashNoticeSub}>
+                            This order was paid at the cash counter. Please keep your physical paper slip or show this screen to the guard at the gate if requested.
+                        </Text>
+                    </View>
+                ) : isExitVerified ? (
+                    // 2. ONLINE BILL (ALREADY SCANNED): Barcode expired permanently
                     <View style={styles.verifiedPassCard}>
                         <View style={styles.verifiedHeaderRow}>
                             <View style={styles.verifiedBadgeLeft}>
@@ -186,10 +192,10 @@ export default function ReceiptScreen({ route, navigation }) {
                             <Icon name="slash" size={32} color="#9CA3AF" style={{ marginBottom: 6 }} />
                             <Text style={styles.verifiedNoticeTitle}>Pass Has Been Used</Text>
                             <Text style={styles.verifiedNoticeSub}>
-                                This receipt was already verified and approved at store gate on{' '}
+                                This digital receipt was verified at the exit gate on{' '}
                                 <Text style={{ fontWeight: '700', color: INK }}>
                                     {formatTimeOnly(verifiedTime)} ({formatDateOnly(verifiedTime)})
-                                </Text>. Re-scanning will be flagged as duplicate.
+                                </Text>. Re-scanning is blocked.
                             </Text>
                         </View>
 
@@ -199,33 +205,43 @@ export default function ReceiptScreen({ route, navigation }) {
                         </View>
                     </View>
                 ) : (
-                    // State A: Active Valid Gate Pass
+                    // 3. ONLINE BILL (ACTIVE): Live One-Time Barcode Active
                     <View style={styles.activePassCard}>
                         <View style={styles.activePassHeader}>
                             <View style={styles.pulseLiveDot} />
                             <Text style={styles.activePassTag}>ACTIVE SECURITY EXIT PASS</Text>
                         </View>
 
-                        <View style={styles.qrPlaceholderBox}>
-                            <Icon name="maximize" size={54} color={TEAL} />
-                            <Text style={styles.qrCodeLabel}>{bill.billRef || 'PASS-AUTHORIZED'}</Text>
+                        <View style={styles.barcodeCardWrapper}>
+                            <View style={styles.barcodeInnerBox}>
+                                <Barcode
+                                    value={exitBarcodeValue}
+                                    format="CODE128"
+                                    maxWidth={BARCODE_INNER_WIDTH}
+                                    height={80}
+                                    lineColor={INK}
+                                    backgroundColor="#FFFFFF"
+                                    onError={(e) => console.log('Exit barcode render note:', e)}
+                                />
+                            </View>
+                            <Text style={styles.barcodeTextLabel}>{exitBarcodeValue}</Text>
                         </View>
 
                         <Text style={styles.activePassTitle}>Scan at Security Exit Gate</Text>
                         <Text style={styles.activePassSub}>
-                            Flash this code to the guard before walking out. Once scanned, this pass will permanently expire.
+                            Show this barcode to the security guard scanner. After the first scan, this pass will permanently expire.
                         </Text>
 
                         <View style={styles.oneTimeSecurityBadge}>
                             <Icon name="shield" size={13} color={TEAL} />
-                            <Text style={styles.oneTimeSecurityText}>One-Time Verification Protection Active</Text>
+                            <Text style={styles.oneTimeSecurityText}>One-Time Verification Active</Text>
                         </View>
                     </View>
                 )}
 
-                {/* 3. Transaction & Timestamp Details */}
+                {/* Transaction & Time Details */}
                 <View style={styles.card}>
-                    <Text style={styles.sectionLabel}>Transaction & Time Details</Text>
+                    <Text style={styles.sectionLabel}>Transaction Details</Text>
 
                     <View style={styles.detailGrid}>
                         <View style={styles.detailItem}>
@@ -271,16 +287,16 @@ export default function ReceiptScreen({ route, navigation }) {
 
                         <View style={styles.detailItem}>
                             <Text style={styles.detailLabel}>Transaction Ref</Text>
-                            <Text style={styles.detailValue} numberOfLines={1}>#{bill.billRef || 'TXN-98402'}</Text>
+                            <Text style={styles.detailValue} numberOfLines={1}>#{bill.billRef || 'TXN-STORE'}</Text>
                         </View>
                     </View>
                 </View>
 
-                {/* 4. Purchased Items List */}
+                {/* Purchased Items List */}
                 <View style={styles.card}>
                     <View style={styles.tableHeaderRow}>
                         <Text style={styles.sectionLabel}>Purchased Items ({totalUnitsCount} Total)</Text>
-                        <Text style={styles.tapNote}>Hold photo to zoom</Text>
+                        <Text style={styles.tapNote}>Tap photo to enlarge</Text>
                     </View>
 
                     <View style={styles.itemsTable}>
@@ -288,6 +304,7 @@ export default function ReceiptScreen({ route, navigation }) {
                             const unitPrice = Number(prod.price || prod.discountPrice || 0);
                             const itemQty = Number(prod.quantity) || 1;
                             const itemTotal = unitPrice * itemQty;
+                            const hasImage = Boolean(prod.imageUrl);
 
                             return (
                                 <View
@@ -295,12 +312,11 @@ export default function ReceiptScreen({ route, navigation }) {
                                     style={[styles.itemRow, idx !== items.length - 1 && styles.borderBottom]}
                                 >
                                     <TouchableOpacity
-                                        onPressIn={() => prod.imageUrl && setZoomImage(prod.imageUrl)}
-                                        onPressOut={() => setZoomImage(null)}
-                                        activeOpacity={0.8}
+                                        onPress={() => hasImage && setZoomImage(prod.imageUrl)}
+                                        activeOpacity={hasImage ? 0.7 : 1}
                                         style={styles.imageBox}
                                     >
-                                        {prod.imageUrl ? (
+                                        {hasImage ? (
                                             <Image
                                                 source={{ uri: prod.imageUrl }}
                                                 style={styles.thumb}
@@ -352,12 +368,25 @@ export default function ReceiptScreen({ route, navigation }) {
 
             </ScrollView>
 
-            {/* Full Screen Image Zoom Modal */}
-            <Modal visible={!!zoomImage} transparent animationType="fade">
-                <View style={styles.zoomBackdrop}>
-                    <Image source={{ uri: zoomImage }} style={styles.enlargedImg} resizeMode="contain" />
-                    <Text style={styles.zoomNote}>Release touch to dismiss preview</Text>
-                </View>
+            {/* Image Zoom Modal */}
+            <Modal visible={!!zoomImage} transparent animationType="fade" onRequestClose={() => setZoomImage(null)}>
+                <TouchableOpacity
+                    style={styles.zoomBackdrop}
+                    activeOpacity={1}
+                    onPress={() => setZoomImage(null)}
+                >
+                    <View style={styles.zoomInnerCard}>
+                        <Image source={{ uri: zoomImage }} style={styles.enlargedImg} resizeMode="contain" />
+                        <TouchableOpacity
+                            style={styles.closeZoomBtn}
+                            onPress={() => setZoomImage(null)}
+                            activeOpacity={0.8}
+                        >
+                            <Icon name="x" size={18} color="#FFFFFF" />
+                            <Text style={styles.closeZoomText}>Close Preview</Text>
+                        </TouchableOpacity>
+                    </View>
+                </TouchableOpacity>
             </Modal>
         </View>
     );
@@ -393,7 +422,6 @@ const styles = StyleSheet.create({
 
     scroll: { padding: 20, paddingBottom: 40 },
 
-    // Status Card
     statusCard: {
         backgroundColor: CARD_BG,
         borderRadius: 18,
@@ -403,9 +431,6 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: BORDER,
         elevation: 2,
-        shadowColor: '#000',
-        shadowOpacity: 0.04,
-        shadowRadius: 6,
     },
     statusIconCircle: {
         width: 50,
@@ -417,7 +442,6 @@ const styles = StyleSheet.create({
     },
     bgSuccess: { backgroundColor: SUCCESS },
     bgDanger: { backgroundColor: DANGER },
-    bgWarning: { backgroundColor: WARNING },
     statusTitle: { fontSize: 18, fontWeight: '800', color: INK },
     statusSub: { fontSize: 12, color: MUTED, marginTop: 2, textAlign: 'center' },
     totalAmountText: { fontSize: 30, fontWeight: '800', color: INK, marginVertical: 10 },
@@ -432,7 +456,20 @@ const styles = StyleSheet.create({
     },
     pillText: { fontSize: 11, fontWeight: '700', color: BODY },
 
-    // Active Security Pass Card
+    // Cash Bill Info Box
+    cashNoticeBox: {
+        backgroundColor: CARD_BG,
+        borderRadius: 16,
+        padding: 16,
+        marginBottom: 14,
+        borderWidth: 1,
+        borderColor: BORDER,
+    },
+    cashNoticeHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
+    cashNoticeTitle: { fontSize: 14, fontWeight: '700', color: INK },
+    cashNoticeSub: { fontSize: 12, color: MUTED, lineHeight: 18 },
+
+    // Active Online Security Pass Card
     activePassCard: {
         backgroundColor: TEAL_SOFT,
         borderRadius: 18,
@@ -460,29 +497,35 @@ const styles = StyleSheet.create({
         color: TEAL,
         letterSpacing: 0.8,
     },
-    qrPlaceholderBox: {
-        width: 150,
-        height: 150,
-        borderRadius: 16,
+    barcodeCardWrapper: {
+        width: '100%',
         backgroundColor: CARD_BG,
-        justifyContent: 'center',
+        borderRadius: 16,
+        paddingVertical: 16,
+        paddingHorizontal: 10,
         alignItems: 'center',
+        justifyContent: 'center',
         borderWidth: 1.5,
         borderColor: '#B6DCDC',
         marginBottom: 14,
+        overflow: 'hidden',
     },
-    qrCodeLabel: {
-        fontSize: 12,
-        fontWeight: '800',
-        color: TEAL,
-        marginTop: 8,
-        letterSpacing: 0.6,
+    barcodeInnerBox: {
+        width: '100%',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#FFFFFF',
+        overflow: 'hidden',
     },
-    activePassTitle: {
-        fontSize: 15,
+    barcodeTextLabel: {
+        fontSize: 13,
         fontWeight: '800',
         color: INK,
+        letterSpacing: 2,
+        marginTop: 10,
+        textAlign: 'center',
     },
+    activePassTitle: { fontSize: 15, fontWeight: '800', color: INK },
     activePassSub: {
         fontSize: 12,
         color: MUTED,
@@ -509,7 +552,7 @@ const styles = StyleSheet.create({
         color: TEAL,
     },
 
-    // Already Verified Security Pass Card
+    // Already Verified Card (Expired Pass)
     verifiedPassCard: {
         backgroundColor: '#F3F4F6',
         borderRadius: 18,
@@ -524,11 +567,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginBottom: 14,
     },
-    verifiedBadgeLeft: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-    },
+    verifiedBadgeLeft: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     verifiedBadgeText: {
         fontSize: 11,
         fontWeight: '800',
@@ -544,11 +583,7 @@ const styles = StyleSheet.create({
         paddingVertical: 4,
         borderRadius: 6,
     },
-    lockedPillText: {
-        fontSize: 10,
-        fontWeight: '800',
-        color: '#DC2626',
-    },
+    lockedPillText: { fontSize: 10, fontWeight: '800', color: '#DC2626' },
     verifiedInnerBox: {
         backgroundColor: CARD_BG,
         borderRadius: 14,
@@ -557,11 +592,7 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: '#E5E7EB',
     },
-    verifiedNoticeTitle: {
-        fontSize: 15,
-        fontWeight: '800',
-        color: INK,
-    },
+    verifiedNoticeTitle: { fontSize: 15, fontWeight: '800', color: INK },
     verifiedNoticeSub: {
         fontSize: 12,
         color: MUTED,
@@ -576,16 +607,8 @@ const styles = StyleSheet.create({
         marginTop: 12,
         paddingHorizontal: 4,
     },
-    footerRefText: {
-        fontSize: 11,
-        color: '#6B7280',
-        fontWeight: '600',
-    },
-    footerStatusFlag: {
-        fontSize: 11,
-        fontWeight: '700',
-        color: '#4B5563',
-    },
+    footerRefText: { fontSize: 11, color: '#6B7280', fontWeight: '600' },
+    footerStatusFlag: { fontSize: 11, fontWeight: '700', color: '#4B5563' },
 
     // Detail Cards
     card: {
@@ -612,7 +635,6 @@ const styles = StyleSheet.create({
     detailValueBold: { fontSize: 13, fontWeight: '800', color: INK },
     timeRow: { flexDirection: 'row', alignItems: 'center' },
 
-    // Items Table
     tableHeaderRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
@@ -653,7 +675,6 @@ const styles = StyleSheet.create({
     unitPriceText: { fontSize: 11, color: MUTED },
     itemTotal: { fontSize: 14, fontWeight: '800', color: INK },
 
-    // Summary Box
     summaryBox: {
         backgroundColor: BG,
         borderRadius: 14,
@@ -668,14 +689,24 @@ const styles = StyleSheet.create({
     grandLabel: { fontSize: 14, fontWeight: '800', color: INK },
     grandVal: { fontSize: 17, fontWeight: '800', color: INK },
 
-    // Zoom Modal
     zoomBackdrop: {
         flex: 1,
         backgroundColor: 'rgba(17, 24, 39, 0.88)',
         justifyContent: 'center',
         alignItems: 'center',
-        padding: 20,
+        padding: 24,
     },
-    enlargedImg: { width: '88%', height: 340, borderRadius: 16 },
-    zoomNote: { color: '#E5E7EB', fontSize: 12, marginTop: 16, fontWeight: '500' },
+    zoomInnerCard: { width: '100%', alignItems: 'center', justifyContent: 'center' },
+    enlargedImg: { width: '90%', height: 320, borderRadius: 16 },
+    closeZoomBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: 'rgba(255, 255, 255, 0.2)',
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderRadius: 20,
+        marginTop: 20,
+    },
+    closeZoomText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
 });
