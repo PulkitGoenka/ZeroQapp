@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { Feather as Icon } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { CommonActions, useFocusEffect } from '@react-navigation/native';
 import RazorpayCheckout from 'react-native-razorpay';
 import { useAuth } from '../../store/AuthContext';
 import { getCart, initiateOnlinePayment, verifyRazorpayPayment, endSession } from '../../services/api';
@@ -53,57 +54,45 @@ export default function OnlineCheckoutScreen({ navigation }) {
         })();
     }, [navigation]);
 
-    // Handle session teardown and go to actual App Home
+    // Session teardown aur direct root MainTabs par reset
     const handleCompleteAndGoHome = useCallback(async () => {
         endSession().catch(() => {});
         try {
             await clearSession();
         } catch (e) {}
 
-        // 1. Root level MainTabs par navigate/reset karein
-        try {
-            navigation.reset({
+        navigation.dispatch(
+            CommonActions.reset({
                 index: 0,
                 routes: [{ name: 'MainTabs' }],
-            });
-        } catch (err1) {
-            try {
-                navigation.navigate('MainTabs');
-            } catch (err2) {
-                navigation.popToTop();
-            }
-        }
+            })
+        );
     }, [clearSession, navigation]);
 
-    useEffect(() => {
-        const onBackPress = () => {
-            if (paymentState === 'SUCCESS') {
-                // Success screen par phone ka hardware back button bhi App Home par bhejega
-                handleCompleteAndGoHome();
+    // Hardware back press interceptor
+    useFocusEffect(
+        useCallback(() => {
+            const onBackPress = () => {
+                if (paymentState === 'SUCCESS') {
+                    handleCompleteAndGoHome();
+                    return true;
+                }
+                if (paymentState === 'FAILED') {
+                    setPaymentState('CHECKOUT');
+                    return true;
+                }
+                navigation.goBack();
                 return true;
-            }
-            if (paymentState === 'FAILED') {
-                setPaymentState('CHECKOUT');
-                return true;
-            }
-            navigation.goBack();
-            return true;
-        };
+            };
 
-        const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
-        return () => {
-            if (sub && typeof sub.remove === 'function') {
-                sub.remove();
-            } else {
-                BackHandler.removeEventListener('hardwareBackPress', onBackPress);
-            }
-        };
-    }, [paymentState, handleCompleteAndGoHome, navigation]);
+            const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+            return () => sub.remove();
+        }, [paymentState, handleCompleteAndGoHome, navigation])
+    );
 
     const handlePay = async () => {
         setProcessing(true);
         try {
-            // Default gateway call (Razorpay handles all methods internally)
             const res = await initiateOnlinePayment('ONLINE');
             const initData = res?.data || res;
 
@@ -260,7 +249,6 @@ export default function OnlineCheckoutScreen({ navigation }) {
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 100 }]}
             >
-                {/* Savings Banner */}
                 {totalDiscount > 0 && (
                     <View style={styles.savingBanner}>
                         <Icon name="tag" size={16} color={SUCCESS} />
@@ -268,7 +256,6 @@ export default function OnlineCheckoutScreen({ navigation }) {
                     </View>
                 )}
 
-                {/* Items Card */}
                 <Text style={styles.sectionHeader}>Items in Cart ({items.length})</Text>
                 <View style={styles.cardGroup}>
                     {items.map((item, idx) => (
@@ -285,7 +272,6 @@ export default function OnlineCheckoutScreen({ navigation }) {
                     ))}
                 </View>
 
-                {/* Bill Breakdown */}
                 <Text style={styles.sectionHeader}>Payment Breakdown</Text>
                 <View style={styles.cardGroup}>
                     <View style={styles.calcRow}>
@@ -311,7 +297,6 @@ export default function OnlineCheckoutScreen({ navigation }) {
                 </View>
             </ScrollView>
 
-            {/* Bottom Bar */}
             <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 14) }]}>
                 <View style={styles.footerMeta}>
                     <Text style={styles.footerMetaLabel}>Final Payable</Text>

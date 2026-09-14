@@ -17,8 +17,7 @@ import { useAuth } from '../../store/AuthContext';
 import { getPaymentStatus, endSession } from '../../services/api';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-// Barcode wrapper strict constraint inside card padding
-const BARCODE_INNER_WIDTH = Math.min(SCREEN_WIDTH - 80, 270);
+const BARCODE_INNER_WIDTH = Math.min(SCREEN_WIDTH - 80, 260);
 
 const TEAL = '#4E989E';
 const TEAL_SOFT = '#EAF5F5';
@@ -35,14 +34,15 @@ const SUCCESS_SOFT = '#ECFDF5';
 const POLL_INTERVAL = 2500;
 
 export default function PaymentQrScreen({ navigation, route }) {
-  const { orderId, totalAmount, qrToken, counterQrToken } = route.params || {};
+  const { orderId, totalAmount, qrToken, counterQrToken } = route?.params || {};
   const { clearSession } = useAuth();
   const [status, setStatus] = useState('PENDING');
+  const [barcodeFailed, setBarcodeFailed] = useState(false);
   const pollRef = useRef(null);
 
-  // Barcode string sanitization: Scanner ke liye short and valid alphanumeric string
-  const rawValue = counterQrToken || qrToken || orderId || 'ORDER-PENDING';
-  const barcodeValue = String(rawValue).replace(/-/g, '').substring(0, 14).toUpperCase();
+  // Fallback safe alphanumeric token
+  const rawToken = counterQrToken || qrToken || orderId || 'CTR8829102';
+  const barcodeValue = String(rawToken).replace(/[^a-zA-Z0-9]/g, '').slice(0, 12).toUpperCase() || 'CTR8829102';
 
   const finalizeSessionAndExit = useCallback(async () => {
     if (pollRef.current) clearInterval(pollRef.current);
@@ -172,15 +172,22 @@ export default function PaymentQrScreen({ navigation, route }) {
             <Text style={styles.barcodeHeader}>CASHIER SCAN BARCODE</Text>
 
             <View style={styles.barcodeWrapper}>
-              <Barcode
-                  value={barcodeValue}
-                  format="CODE128"
-                  maxWidth={BARCODE_INNER_WIDTH}
-                  height={85}
-                  lineColor={INK}
-                  backgroundColor="#FFFFFF"
-                  onError={(error) => console.log('Barcode generation error:', error)}
-              />
+              {!barcodeFailed ? (
+                  <Barcode
+                      value={barcodeValue}
+                      format="CODE128"
+                      maxWidth={BARCODE_INNER_WIDTH}
+                      height={85}
+                      lineColor={INK}
+                      backgroundColor="#FFFFFF"
+                      onError={() => setBarcodeFailed(true)}
+                  />
+              ) : (
+                  <View style={styles.fallbackBox}>
+                    <Icon name="maximize" size={44} color={TEAL} />
+                    <Text style={styles.fallbackCode}>{barcodeValue}</Text>
+                  </View>
+              )}
             </View>
 
             <Text style={styles.barcodeString} numberOfLines={1}>
@@ -265,11 +272,23 @@ const styles = StyleSheet.create({
   },
   barcodeWrapper: {
     width: '100%',
+    minHeight: 90,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#FFFFFF',
     paddingVertical: 10,
-    overflow: 'hidden',
+  },
+  fallbackBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+  },
+  fallbackCode: {
+    marginTop: 6,
+    fontSize: 15,
+    fontWeight: '800',
+    color: TEAL,
+    letterSpacing: 1.5,
   },
   barcodeString: {
     fontSize: 14,
