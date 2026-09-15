@@ -9,13 +9,10 @@ import {
     Modal,
     StatusBar,
     Share,
-    Dimensions,
 } from 'react-native';
 import { Feather as Icon } from '@expo/vector-icons';
-import Barcode from 'react-native-barcode-svg';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const BARCODE_INNER_WIDTH = Math.min(SCREEN_WIDTH - 80, 260);
+import { SafeAreaView } from 'react-native-safe-area-context';
+import PureBarcode from '../BarcodesGenrater/PureBarcode';
 
 const TEAL = '#4E989E';
 const TEAL_SOFT = '#EAF5F5';
@@ -28,15 +25,13 @@ const CARD_BG = '#FFFFFF';
 const SUCCESS = '#059669';
 const SUCCESS_SOFT = '#ECFDF5';
 const DANGER = '#EF4444';
-const DANGER_SOFT = '#FEF2F2';
-const WARNING = '#D97706';
 
 const fmt = (n) => `₹${Number(n || 0).toFixed(2)}`;
 
 const formatTimeOnly = (iso) => {
     if (!iso) return '--:--:--';
     const d = new Date(iso);
-    return d.toLocaleTimeString('en-IN', {
+    return isNaN(d.getTime()) ? '--:--:--' : d.toLocaleTimeString('en-IN', {
         hour: '2-digit',
         minute: '2-digit',
         second: '2-digit',
@@ -47,7 +42,7 @@ const formatTimeOnly = (iso) => {
 const formatDateOnly = (iso) => {
     if (!iso) return '-- --- ----';
     const d = new Date(iso);
-    return d.toLocaleDateString('en-IN', {
+    return isNaN(d.getTime()) ? '-- --- ----' : d.toLocaleDateString('en-IN', {
         day: '2-digit',
         month: 'short',
         year: 'numeric',
@@ -64,13 +59,13 @@ export default function ReceiptScreen({ route, navigation }) {
     const isCashPayment = paymentMethod === 'CASH' || paymentMethod === 'COUNTER';
 
     // 2. One-Time Security Gate Exit Verification State
-    const isExitVerified = Boolean(bill.isExitVerified || bill.exitVerifiedAt || bill.verifiedAt);
+    const isExitVerified = Boolean(bill.isExitVerified || bill.exitVerifiedAt || bill.verifiedAt || bill.qrUsed);
     const verifiedTime = bill.exitVerifiedAt || bill.verifiedAt;
 
-    // 3. Gate Barcode String (Only for Online payment)
-    const rawExitToken = bill.exitQrToken || bill.qrToken || bill.billRef || bill.orderId || 'EXIT00000000';
+    // 3. Gate Barcode String (Max 12 chars for clean 1D laser scanning)
+    const rawExitToken = bill.exitQrToken || bill.qrToken || bill.billRef || bill.orderId || 'EXT000000';
     const cleanExitString = String(rawExitToken).replace(/[^a-zA-Z0-9]/g, '');
-    const exitBarcodeValue = (cleanExitString.length > 12 ? cleanExitString.substring(0, 12) : cleanExitString).toUpperCase() || 'EXIT00000000';
+    const exitBarcodeValue = (cleanExitString.length > 12 ? cleanExitString.substring(0, 12) : cleanExitString).toUpperCase();
 
     const items = bill.items && bill.items.length > 0
         ? bill.items
@@ -101,7 +96,7 @@ export default function ReceiptScreen({ route, navigation }) {
     };
 
     return (
-        <View style={styles.flex}>
+        <SafeAreaView style={styles.flex} edges={['top', 'bottom']}>
             <StatusBar barStyle="dark-content" backgroundColor={CARD_BG} />
 
             {/* Header */}
@@ -164,7 +159,6 @@ export default function ReceiptScreen({ route, navigation }) {
 
                 {/* ── SECURITY EXIT GATE PASS LOGIC ── */}
                 {isCashPayment ? (
-                    // 1. CASH BILL: No Barcode, Simple Verification Box
                     <View style={styles.cashNoticeBox}>
                         <View style={styles.cashNoticeHeader}>
                             <Icon name="file-text" size={16} color={TEAL} />
@@ -175,7 +169,6 @@ export default function ReceiptScreen({ route, navigation }) {
                         </Text>
                     </View>
                 ) : isExitVerified ? (
-                    // 2. ONLINE BILL (ALREADY SCANNED): Barcode expired permanently
                     <View style={styles.verifiedPassCard}>
                         <View style={styles.verifiedHeaderRow}>
                             <View style={styles.verifiedBadgeLeft}>
@@ -200,30 +193,24 @@ export default function ReceiptScreen({ route, navigation }) {
                         </View>
 
                         <View style={styles.passFooterMeta}>
-                            <Text style={styles.footerRefText}>Auth Ref: #{bill.billRef}</Text>
+                            <Text style={styles.footerRefText}>Auth Ref: #{bill.billRef || 'N/A'}</Text>
                             <Text style={styles.footerStatusFlag}>Status: GATE CHECKED</Text>
                         </View>
                     </View>
                 ) : (
-                    // 3. ONLINE BILL (ACTIVE): Live One-Time Barcode Active
                     <View style={styles.activePassCard}>
                         <View style={styles.activePassHeader}>
                             <View style={styles.pulseLiveDot} />
                             <Text style={styles.activePassTag}>ACTIVE SECURITY EXIT PASS</Text>
                         </View>
 
+                        {/* PureBarcode Integration */}
                         <View style={styles.barcodeCardWrapper}>
-                            <View style={styles.barcodeInnerBox}>
-                                <Barcode
-                                    value={exitBarcodeValue}
-                                    format="CODE128"
-                                    maxWidth={BARCODE_INNER_WIDTH}
-                                    height={80}
-                                    lineColor={INK}
-                                    backgroundColor="#FFFFFF"
-                                    onError={(e) => console.log('Exit barcode render note:', e)}
-                                />
-                            </View>
+                            <PureBarcode
+                                value={exitBarcodeValue}
+                                barWidth={2.0}
+                                height={80}
+                            />
                             <Text style={styles.barcodeTextLabel}>{exitBarcodeValue}</Text>
                         </View>
 
@@ -345,7 +332,6 @@ export default function ReceiptScreen({ route, navigation }) {
                         })}
                     </View>
 
-                    {/* Financial Breakdown */}
                     <View style={styles.summaryBox}>
                         <View style={styles.summaryRow}>
                             <Text style={styles.summaryText}>Total Units Count</Text>
@@ -388,7 +374,7 @@ export default function ReceiptScreen({ route, navigation }) {
                     </View>
                 </TouchableOpacity>
             </Modal>
-        </View>
+        </SafeAreaView>
     );
 }
 
@@ -400,8 +386,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingHorizontal: 20,
-        paddingTop: 54,
-        paddingBottom: 14,
+        paddingVertical: 14,
         backgroundColor: CARD_BG,
         borderBottomWidth: 1,
         borderBottomColor: BORDER,
@@ -456,7 +441,6 @@ const styles = StyleSheet.create({
     },
     pillText: { fontSize: 11, fontWeight: '700', color: BODY },
 
-    // Cash Bill Info Box
     cashNoticeBox: {
         backgroundColor: CARD_BG,
         borderRadius: 16,
@@ -469,7 +453,6 @@ const styles = StyleSheet.create({
     cashNoticeTitle: { fontSize: 14, fontWeight: '700', color: INK },
     cashNoticeSub: { fontSize: 12, color: MUTED, lineHeight: 18 },
 
-    // Active Online Security Pass Card
     activePassCard: {
         backgroundColor: TEAL_SOFT,
         borderRadius: 18,
@@ -501,28 +484,19 @@ const styles = StyleSheet.create({
         width: '100%',
         backgroundColor: CARD_BG,
         borderRadius: 16,
-        paddingVertical: 16,
-        paddingHorizontal: 10,
+        paddingVertical: 14,
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: 1.5,
         borderColor: '#B6DCDC',
         marginBottom: 14,
-        overflow: 'hidden',
-    },
-    barcodeInnerBox: {
-        width: '100%',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: '#FFFFFF',
-        overflow: 'hidden',
     },
     barcodeTextLabel: {
         fontSize: 13,
         fontWeight: '800',
         color: INK,
         letterSpacing: 2,
-        marginTop: 10,
+        marginTop: 8,
         textAlign: 'center',
     },
     activePassTitle: { fontSize: 15, fontWeight: '800', color: INK },
@@ -552,7 +526,6 @@ const styles = StyleSheet.create({
         color: TEAL,
     },
 
-    // Already Verified Card (Expired Pass)
     verifiedPassCard: {
         backgroundColor: '#F3F4F6',
         borderRadius: 18,
@@ -610,7 +583,6 @@ const styles = StyleSheet.create({
     footerRefText: { fontSize: 11, color: '#6B7280', fontWeight: '600' },
     footerStatusFlag: { fontSize: 11, fontWeight: '700', color: '#4B5563' },
 
-    // Detail Cards
     card: {
         backgroundColor: CARD_BG,
         borderRadius: 18,

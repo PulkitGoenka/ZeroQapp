@@ -8,16 +8,13 @@ import {
   StatusBar,
   BackHandler,
   ScrollView,
-  Dimensions,
 } from 'react-native';
 import { Feather as Icon } from '@expo/vector-icons';
-import Barcode from 'react-native-barcode-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../store/AuthContext';
 import { getPaymentStatus, endSession } from '../../services/api';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const BARCODE_INNER_WIDTH = Math.min(SCREEN_WIDTH - 80, 260);
+// Aapke project folder hierarchy ke mutabiq relative path:
+import PureBarcode from '../BarcodesGenrater/PureBarcode';
 
 const TEAL = '#4E989E';
 const TEAL_SOFT = '#EAF5F5';
@@ -37,12 +34,14 @@ export default function PaymentQrScreen({ navigation, route }) {
   const { orderId, totalAmount, qrToken, counterQrToken } = route?.params || {};
   const { clearSession } = useAuth();
   const [status, setStatus] = useState('PENDING');
-  const [barcodeFailed, setBarcodeFailed] = useState(false);
   const pollRef = useRef(null);
 
-  // Fallback safe alphanumeric token
+  // Counter scanning ke liye clean alphanumeric token (Max 10-12 chars)
   const rawToken = counterQrToken || qrToken || orderId || 'CTR8829102';
-  const barcodeValue = String(rawToken).replace(/[^a-zA-Z0-9]/g, '').slice(0, 12).toUpperCase() || 'CTR8829102';
+  const barcodeValue = String(rawToken)
+      .replace(/[^a-zA-Z0-9]/g, '')
+      .slice(0, 12)
+      .toUpperCase();
 
   const finalizeSessionAndExit = useCallback(async () => {
     if (pollRef.current) clearInterval(pollRef.current);
@@ -84,7 +83,7 @@ export default function PaymentQrScreen({ navigation, route }) {
     };
   }, [status, navigation, finalizeSessionAndExit]);
 
-  // Status polling for counter confirmation
+  // Employee dashboard dwara settle karne ka background listener (Polling)
   useEffect(() => {
     if (!orderId) return;
 
@@ -167,27 +166,16 @@ export default function PaymentQrScreen({ navigation, route }) {
             <Text style={styles.amountVal}>₹{totalAmount || 0}</Text>
           </View>
 
-          {/* Constrained Barcode Card */}
+          {/* Laser Gun Friendly Barcode Card */}
           <View style={styles.barcodeCard}>
             <Text style={styles.barcodeHeader}>CASHIER SCAN BARCODE</Text>
 
             <View style={styles.barcodeWrapper}>
-              {!barcodeFailed ? (
-                  <Barcode
-                      value={barcodeValue}
-                      format="CODE128"
-                      maxWidth={BARCODE_INNER_WIDTH}
-                      height={85}
-                      lineColor={INK}
-                      backgroundColor="#FFFFFF"
-                      onError={() => setBarcodeFailed(true)}
-                  />
-              ) : (
-                  <View style={styles.fallbackBox}>
-                    <Icon name="maximize" size={44} color={TEAL} />
-                    <Text style={styles.fallbackCode}>{barcodeValue}</Text>
-                  </View>
-              )}
+              <PureBarcode
+                  value={barcodeValue}
+                  barWidth={2.2}
+                  height={85}
+              />
             </View>
 
             <Text style={styles.barcodeString} numberOfLines={1}>
@@ -254,48 +242,34 @@ const styles = StyleSheet.create({
     width: '100%',
     backgroundColor: CARD_BG,
     borderRadius: 18,
-    paddingVertical: 22,
+    paddingVertical: 20,
     paddingHorizontal: 12,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: BORDER,
     elevation: 2,
-    overflow: 'hidden',
   },
   barcodeHeader: {
     fontSize: 11,
     fontWeight: '800',
     color: MUTED,
     letterSpacing: 1.2,
-    marginBottom: 14,
+    marginBottom: 12,
   },
   barcodeWrapper: {
     width: '100%',
-    minHeight: 90,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#FFFFFF',
-    paddingVertical: 10,
-  },
-  fallbackBox: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-  },
-  fallbackCode: {
-    marginTop: 6,
-    fontSize: 15,
-    fontWeight: '800',
-    color: TEAL,
-    letterSpacing: 1.5,
+    paddingVertical: 6,
   },
   barcodeString: {
     fontSize: 14,
     fontWeight: '800',
     letterSpacing: 2,
     color: INK,
-    marginTop: 12,
+    marginTop: 10,
     textAlign: 'center',
   },
 
