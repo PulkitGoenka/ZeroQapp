@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -109,10 +109,14 @@ export default function AppNavigator() {
     const { user, isLoading } = useAuth();
     const [isSplashDone, setIsSplashDone] = useState(false);
 
+    // useRef ensures this object is created once and never changes,
+    // so SplashScreen's useEffect timer does not reset when isLoading changes.
+    const splashNavigation = useRef({ replace: () => setIsSplashDone(true) }).current;
+
     if (isLoading || !isSplashDone) {
         return (
             <SafeAreaProvider>
-                <SplashScreen navigation={{ replace: () => setIsSplashDone(true) }} />
+                <SplashScreen navigation={splashNavigation} />
             </SafeAreaProvider>
         );
     }

@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────
-//  ZeroQ API Service
+//  itself API Service
 //  Base URL: your Spring Boot backend (port 8080)
 //  Change BASE_URL to your server IP/domain when deploying
 // ─────────────────────────────────────────────────────────────

@@ -197,19 +197,21 @@ const styles = StyleSheet.create({
     elevation: 7,
   },
   cardTitle: {
+    fontFamily: 'Manrope_700Bold',
     fontSize: 24,
-    fontWeight: '700',
+    letterSpacing: -1,
     color: '#111827',
     marginBottom: 4,
   },
   cardSub: {
+    fontFamily: 'DMSans_400Regular',
     fontSize: 14,
     color: '#6B7280',
     marginBottom: 24,
   },
   label: {
+    fontFamily: 'DMSans_600SemiBold',
     fontSize: 13,
-    fontWeight: '600',
     color: '#374151',
     marginBottom: 8,
   },
@@ -234,6 +236,7 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
+    fontFamily: 'DMSans_400Regular',
     fontSize: 15,
     color: '#111827',
     height: 50,
@@ -242,8 +245,8 @@ const styles = StyleSheet.create({
     paddingRight: 4,
   },
   prefixText: {
+    fontFamily: 'DMSans_600SemiBold',
     fontSize: 13,
-    fontWeight: '600',
     color: '#374151',
   },
   divider: {
@@ -269,11 +272,13 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   btnText: {
+    fontFamily: 'DMSans_700Bold',
     color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '700',
+    letterSpacing: 0.2,
   },
   note: {
+    fontFamily: 'DMSans_400Regular',
     textAlign: 'center',
     color: '#9CA3AF',
     fontSize: 12,

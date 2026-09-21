@@ -13,17 +13,33 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     (async () => {
       try {
-        const token       = await AsyncStorage.getItem('accessToken');
-        const savedUser   = await AsyncStorage.getItem('userInfo');
-        const savedSession = await AsyncStorage.getItem('activeSession');
+        console.log("AuthContext: Starting initialization...");
+        let timeoutId;
+        const timeoutPromise = new Promise((_, reject) => {
+            timeoutId = setTimeout(() => reject(new Error('Timeout')), 3000);
+        });
+        timeoutPromise.catch(() => {}); // Prevent unhandled rejection
+        
+        const loadDataPromise = async () => {
+            const token       = await AsyncStorage.getItem('accessToken');
+            const savedUser   = await AsyncStorage.getItem('userInfo');
+            const savedSession = await AsyncStorage.getItem('activeSession');
+            return { token, savedUser, savedSession };
+        };
+
+        const { token, savedUser, savedSession } = await Promise.race([loadDataPromise(), timeoutPromise]);
+        clearTimeout(timeoutId);
+
         if (token && savedUser) {
           setUser(JSON.parse(savedUser));
-          // Only restore session if it's a real object, not "null" string
           if (savedSession && savedSession !== 'null') {
             setSession(JSON.parse(savedSession));
           }
         }
-      } catch {}
+        console.log("AuthContext: Initialization complete.");
+      } catch (e) {
+        console.warn("AuthContext Init Error:", e);
+      }
       finally { setIsLoading(false); }
     })();
   }, []);

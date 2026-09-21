@@ -39,7 +39,8 @@ const fmtDate = (iso) => {
 };
 
 export default function HomeScreen({ navigation }) {
-  const { session, user } = useAuth();
+  const { } = useAuth();
+
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -65,100 +66,9 @@ export default function HomeScreen({ navigation }) {
 
   const renderHeader = () => (
       <View style={styles.topContainer}>
-        {/* User Greeting */}
-        <View style={styles.userRow}>
-          <View>
-            <Text style={styles.greetSub}>Welcome back,</Text>
-            <Text style={styles.greetName}>{user?.name || 'Shopper'}</Text>
-          </View>
-          <TouchableOpacity
-              style={styles.profileBtn}
-              onPress={() => navigation.navigate('Profile')}
-              activeOpacity={0.8}
-          >
-            <Icon name="user" size={18} color={TEAL} />
-          </TouchableOpacity>
-        </View>
-
-        {/* 1. Active Store Session Card (Agar koi session chal raha ho) */}
-        {session ? (
-            <View style={styles.activeSessionCard}>
-              <View style={styles.activeCardHeader}>
-                <View style={styles.activeTag}>
-                  <Text style={styles.activeTagText}>● SHOPPING IN PROGRESS</Text>
-                </View>
-                <TouchableOpacity
-                    onPress={() => navigation.navigate('Cart')}
-                    style={styles.cartIconBtn}
-                >
-                  <Icon name="shopping-cart" size={16} color={SUCCESS} />
-                </TouchableOpacity>
-              </View>
-
-              <Text style={styles.activeStoreName} numberOfLines={1}>
-                {session.storeName || 'Active Store'}
-              </Text>
-              <Text style={styles.activeStoreSub}>Your cart is open. Tap resume to keep scanning items.</Text>
-
-              <View style={styles.activeActionRow}>
-                <TouchableOpacity
-                    style={styles.resumeBtn}
-                    onPress={() => navigation.navigate('StoreHome')}
-                    activeOpacity={0.85}
-                >
-                  <Text style={styles.resumeBtnText}>Resume Session</Text>
-                  <Icon name="arrow-right" size={15} color="#FFFFFF" />
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                    style={styles.scanQuickBtn}
-                    onPress={() => navigation.navigate('Scanner')}
-                    activeOpacity={0.85}
-                >
-                  <Icon name="camera" size={16} color={TEAL} />
-                </TouchableOpacity>
-              </View>
-            </View>
-        ) : (
-            /* 2. New Store Check-In Prompt */
-            <View style={styles.newStoreCard}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.newStoreTitle}>Ready to Shop?</Text>
-                <Text style={styles.newStoreSub}>Locate a branch or scan the entrance QR tag to start.</Text>
-              </View>
-              <TouchableOpacity
-                  style={styles.findStoreBtn}
-                  onPress={() => navigation.navigate('StoreDiscovery')}
-                  activeOpacity={0.85}
-              >
-                <Icon name="map-pin" size={15} color={GOLD_TEXT} />
-                <Text style={styles.findStoreText}>Enter Store</Text>
-              </TouchableOpacity>
-            </View>
-        )}
-
-        {/* Quick Navigation Pills */}
-        <View style={styles.quickActions}>
-          <TouchableOpacity
-              style={styles.actionPill}
-              onPress={() => navigation.navigate('StoreDiscovery')}
-          >
-            <Icon name="search" size={16} color={TEAL} />
-            <Text style={styles.actionPillText}>Browse Stores</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-              style={styles.actionPill}
-              onPress={() => navigation.navigate('Cart')}
-          >
-            <Icon name="shopping-bag" size={16} color={TEAL} />
-            <Text style={styles.actionPillText}>Active Cart</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Transaction History Section Header */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Recent Invoices & Transactions</Text>
+        {/* Page Title */}
+        <View style={styles.pageTitleRow}>
+          <Text style={styles.pageTitle}>History</Text>
           <Text style={styles.sectionCount}>{history.length} Paid</Text>
         </View>
       </View>
@@ -257,16 +167,16 @@ const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: BG },
   center: { justifyContent: 'center', alignItems: 'center' },
   listContent: { paddingHorizontal: 16, paddingBottom: 28 },
-  topContainer: { paddingTop: 10, paddingBottom: 6 },
+  topContainer: { paddingTop: 16, paddingBottom: 6 },
 
-  userRow: {
+  pageTitleRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 16,
   },
-  greetSub: { fontSize: 13, color: MUTED, fontWeight: '500' },
-  greetName: { fontSize: 20, fontWeight: '800', color: INK },
+  pageTitle: { fontFamily: 'Manrope_800ExtraBold', fontSize: 24, letterSpacing: -1.1, color: INK },
+
   profileBtn: {
     width: 40,
     height: 40,
@@ -378,7 +288,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   sectionTitle: { fontSize: 14, fontWeight: '800', color: INK },
-  sectionCount: { fontSize: 12, color: MUTED, fontWeight: '600' },
+  sectionCount: { fontFamily: 'DMSans_500Medium', fontSize: 12, color: MUTED },
 
   billCard: {
     backgroundColor: CARD_BG,
@@ -428,8 +338,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 8,
   },
-  storeTitle: { fontSize: 15, fontWeight: '700', color: INK, flex: 1, marginRight: 8 },
-  amountText: { fontSize: 17, fontWeight: '800', color: INK },
+  storeTitle: { fontFamily: 'Manrope_600SemiBold', fontSize: 15, letterSpacing: -0.4, color: INK, flex: 1, marginRight: 8 },
+  amountText: { fontFamily: 'Manrope_700Bold', fontSize: 17, letterSpacing: -0.6, color: INK },
 
   billCardFooter: {
     flexDirection: 'row',

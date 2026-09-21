@@ -163,16 +163,16 @@ const styles = StyleSheet.create({
         gap: 4,
     },
     letter: {
+        fontFamily: 'Manrope_800ExtraBold',
         fontSize: 44,
-        fontWeight: '900',
         color: '#FFFFFF',
-        letterSpacing: 3,
+        letterSpacing: -2,
     },
     tagline: {
+        fontFamily: 'DMSans_600SemiBold',
         fontSize: 13,
-        fontWeight: '800',
         color: '#FFFFFF',
-        letterSpacing: 2,
+        letterSpacing: 2.5,
         marginTop: 6,
     },
     accent: {

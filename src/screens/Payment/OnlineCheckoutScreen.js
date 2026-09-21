@@ -9,13 +9,106 @@ import {
     StatusBar,
     BackHandler,
     Alert,
+    Modal,
 } from 'react-native';
 import { Feather as Icon } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CommonActions, useFocusEffect } from '@react-navigation/native';
-import RazorpayCheckout from 'react-native-razorpay';
+import { WebView } from 'react-native-webview';
 import { useAuth } from '../../store/AuthContext';
 import { getCart, initiateOnlinePayment, verifyRazorpayPayment, endSession } from '../../services/api';
+
+// HTML generator for Razorpay Standard Checkout in WebView (compatible with Expo Go)
+const generateRazorpayHtml = (options) => {
+    if (!options) return '';
+    return `<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #F5FAFA;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        .center-box {
+            text-align: center;
+            padding: 24px;
+        }
+        .spinner {
+            border: 3px solid #EAF5F5;
+            border-top: 3px solid #4E989E;
+            border-radius: 50%;
+            width: 36px;
+            height: 36px;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 16px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="center-box">
+        <div class="spinner"></div>
+        <p style="font-size: 15px; font-weight: 600; color: #111827; margin: 0;">Securing payment with Razorpay...</p>
+        <p style="font-size: 12px; color: #6B7280; margin-top: 6px;">Please wait while the gateway loads</p>
+    </div>
+    <script>
+        try {
+            var options = ${JSON.stringify(options)};
+
+            options.handler = function(response) {
+                window.ReactNativeWebView.postMessage(JSON.stringify({
+                    type: 'SUCCESS',
+                    data: response
+                }));
+            };
+
+            options.modal = {
+                ondismiss: function() {
+                    window.ReactNativeWebView.postMessage(JSON.stringify({
+                        type: 'CANCELLED'
+                    }));
+                },
+                escape: true,
+                backdropclose: false
+            };
+
+            var rzp = new Razorpay(options);
+
+            rzp.on('payment.failed', function(response) {
+                window.ReactNativeWebView.postMessage(JSON.stringify({
+                    type: 'FAILED',
+                    error: response.error
+                }));
+            });
+
+            window.onload = function() {
+                setTimeout(function() {
+                    rzp.open();
+                }, 300);
+            };
+        } catch(e) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'ERROR',
+                message: e.message
+            }));
+        }
+    </script>
+</body>
+</html>`;
+};
 
 const TEAL = '#4E989E';
 const TEAL_SOFT = '#EAF5F5';
@@ -40,6 +133,11 @@ export default function OnlineCheckoutScreen({ navigation }) {
 
     const [paymentState, setPaymentState] = useState('CHECKOUT');
     const [verifiedBill, setVerifiedBill] = useState(null);
+
+    // Razorpay WebView Modal state for Expo Go
+    const [razorpayVisible, setRazorpayVisible] = useState(false);
+    const [razorpayOptions, setRazorpayOptions] = useState(null);
+    const [activeOrderId, setActiveOrderId] = useState(null);
 
     useEffect(() => {
         (async () => {
@@ -73,6 +171,11 @@ export default function OnlineCheckoutScreen({ navigation }) {
     useFocusEffect(
         useCallback(() => {
             const onBackPress = () => {
+                if (razorpayVisible) {
+                    setRazorpayVisible(false);
+                    setProcessing(false);
+                    return true;
+                }
                 if (paymentState === 'SUCCESS') {
                     handleCompleteAndGoHome();
                     return true;
@@ -87,8 +190,52 @@ export default function OnlineCheckoutScreen({ navigation }) {
 
             const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
             return () => sub.remove();
-        }, [paymentState, handleCompleteAndGoHome, navigation])
+        }, [razorpayVisible, paymentState, handleCompleteAndGoHome, navigation])
     );
+
+    // Razorpay WebView message bridge
+    const onWebViewMessage = async (event) => {
+        try {
+            const res = JSON.parse(event.nativeEvent.data);
+
+            if (res.type === 'SUCCESS') {
+                setRazorpayVisible(false);
+                setProcessing(true);
+                try {
+                    const payload = {
+                        orderId: activeOrderId,
+                        razorpayPaymentId: res.data.razorpay_payment_id,
+                        razorpayOrderId: res.data.razorpay_order_id,
+                        razorpaySignature: res.data.razorpay_signature,
+                    };
+
+                    const verifyRes = await verifyRazorpayPayment(payload);
+                    setVerifiedBill(verifyRes?.data || verifyRes);
+                    setPaymentState('SUCCESS');
+                } catch (err) {
+                    Alert.alert('Verification Issue', err?.message || 'Payment succeeded but verification failed.');
+                    setPaymentState('FAILED');
+                } finally {
+                    setProcessing(false);
+                }
+            } else if (res.type === 'CANCELLED') {
+                setRazorpayVisible(false);
+                setProcessing(false);
+            } else if (res.type === 'FAILED') {
+                setRazorpayVisible(false);
+                setProcessing(false);
+                Alert.alert('Payment Failed', res.error?.description || 'Transaction was declined or failed.');
+                setPaymentState('FAILED');
+            } else if (res.type === 'ERROR') {
+                setRazorpayVisible(false);
+                setProcessing(false);
+                Alert.alert('Gateway Error', res.message || 'Razorpay checkout encountered an error.');
+            }
+        } catch (e) {
+            setRazorpayVisible(false);
+            setProcessing(false);
+        }
+    };
 
     const handlePay = async () => {
         setProcessing(true);
@@ -100,6 +247,12 @@ export default function OnlineCheckoutScreen({ navigation }) {
             const amountInPaise = initData?.amountInPaise || (bill?.totalAmount * 100);
             const keyId = initData?.razorpayKeyId;
 
+            if (!razorpayOrderId || !keyId) {
+                throw new Error('Could not retrieve payment credentials from server.');
+            }
+
+            setActiveOrderId(initData.orderId);
+
             const options = {
                 description: 'Store Self-Checkout Purchase',
                 currency: 'INR',
@@ -110,39 +263,17 @@ export default function OnlineCheckoutScreen({ navigation }) {
                 prefill: {
                     contact: user?.phone || '9999999999',
                     name: user?.name || 'Customer',
+                    email: user?.email || undefined,
                 },
                 theme: { color: TEAL },
             };
 
-            RazorpayCheckout.open(options)
-                .then(async (data) => {
-                    try {
-                        const payload = {
-                            orderId: initData.orderId,
-                            razorpayPaymentId: data.razorpay_payment_id,
-                            razorpayOrderId: data.razorpay_order_id,
-                            razorpaySignature: data.razorpay_signature,
-                        };
-
-                        const verifyRes = await verifyRazorpayPayment(payload);
-                        setVerifiedBill(verifyRes?.data || verifyRes);
-                        setPaymentState('SUCCESS');
-                    } catch (err) {
-                        Alert.alert('Verification Issue', err?.message || 'Payment succeeded but verification failed.');
-                        setPaymentState('FAILED');
-                    }
-                })
-                .catch((error) => {
-                    console.log('Payment closed/failed:', error?.description || error);
-                    setPaymentState('FAILED');
-                })
-                .finally(() => {
-                    setProcessing(false);
-                });
-
+            setRazorpayOptions(options);
+            setRazorpayVisible(true);
         } catch (e) {
             Alert.alert('Gateway Error', e.message || 'Could not initiate checkout.');
             setPaymentState('FAILED');
+        } finally {
             setProcessing(false);
         }
     };
@@ -318,6 +449,57 @@ export default function OnlineCheckoutScreen({ navigation }) {
                     )}
                 </TouchableOpacity>
             </View>
+
+            {/* Razorpay WebView Modal for Expo Go */}
+            <Modal
+                visible={razorpayVisible}
+                animationType="slide"
+                onRequestClose={() => {
+                    setRazorpayVisible(false);
+                    setProcessing(false);
+                }}
+            >
+                <SafeAreaView style={styles.modalContainer} edges={['top', 'bottom']}>
+                    <View style={styles.modalHeader}>
+                        <View style={styles.modalHeaderLeft}>
+                            <Icon name="shield" size={18} color={TEAL} />
+                            <Text style={styles.modalHeaderTitle}>Razorpay Checkout</Text>
+                        </View>
+                        <TouchableOpacity
+                            style={styles.modalCloseBtn}
+                            onPress={() => {
+                                setRazorpayVisible(false);
+                                setProcessing(false);
+                            }}
+                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        >
+                            <Text style={styles.modalCloseText}>Cancel</Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    {razorpayOptions && (
+                        <WebView
+                            key={razorpayOptions.order_id}
+                            source={{
+                                html: generateRazorpayHtml(razorpayOptions),
+                                baseUrl: 'https://api.razorpay.com',
+                            }}
+                            onMessage={onWebViewMessage}
+                            javaScriptEnabled={true}
+                            domStorageEnabled={true}
+                            startInLoadingState={true}
+                            renderLoading={() => (
+                                <View style={[StyleSheet.absoluteFill, styles.center, { backgroundColor: BG }]}>
+                                    <ActivityIndicator size="large" color={TEAL} />
+                                    <Text style={{ marginTop: 12, color: MUTED, fontSize: 13, fontWeight: '500' }}>
+                                        Loading payment options...
+                                    </Text>
+                                </View>
+                            )}
+                        />
+                    )}
+                </SafeAreaView>
+            </Modal>
         </SafeAreaView>
     );
 }
@@ -529,4 +711,40 @@ const styles = StyleSheet.create({
         gap: 8,
     },
     retryBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
+
+    modalContainer: {
+        flex: 1,
+        backgroundColor: CARD_BG,
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 20,
+        paddingVertical: 14,
+        backgroundColor: CARD_BG,
+        borderBottomWidth: 1,
+        borderBottomColor: BORDER,
+    },
+    modalHeaderLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    modalHeaderTitle: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: INK,
+    },
+    modalCloseBtn: {
+        paddingVertical: 6,
+        paddingHorizontal: 12,
+        borderRadius: 8,
+        backgroundColor: '#FEE2E2',
+    },
+    modalCloseText: {
+        fontSize: 13,
+        fontWeight: '700',
+        color: DANGER,
+    },
 });
