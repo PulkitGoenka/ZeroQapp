@@ -13,8 +13,7 @@
     },
     "plugins": [
       "expo-camera",
-      "expo-font",
-      "expo-status-bar"
+      "expo-font"
     ],
     "android": {
       "package": "com.its3lf.app",
@@ -23,11 +22,14 @@
         "android.permission.RECORD_AUDIO"
       ]
     },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "extra": {
       "eas": {
-        "projectId": "62fb132a-9cdc-4aba-aa77-792569e987bd"
+        "projectId": "12f32bdf-d0c2-4890-987b-2c85f1670816"
       }
     },
-    "owner": "samradh1718"
+    "owner": "pulkitgoenka"
   }
 }
